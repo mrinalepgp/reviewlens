@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useActionState } from 'react'
-import { signup } from '@/app/login/actions'
+import { signup } from './actions'
 
 const initialState = {
   error: ''
