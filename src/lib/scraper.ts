@@ -72,6 +72,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     
     // Fetch up to 3 pages for multi-page extraction (Flipkart primarily)
     const maxPages = marketplace === 'flipkart' ? 3 : 1;
+    let useDirectFetch = false;
     
     for (let page = 1; page <= maxPages; page++) {
       let pageUrl = url;
@@ -82,17 +83,43 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       console.log(`[Live Scraper] Fetching page ${page} for ${pageUrl}`);
-      const scrapingdogUrl = `https://api.scrapingdog.com/scrape?api_key=${apiKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
-      const response = await fetch(scrapingdogUrl);
-      
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.warn(`[Live Scraper] Gateway response error for page ${page}: ${response.status} - ${errorBody}`);
-        if (page === 1) throw new Error(`Gateway response error on page 1: ${response.status} - ${errorBody}`);
-        break; // Stop fetching further pages if we hit an error but page 1 worked
+      let html = "";
+
+      if (!useDirectFetch) {
+        const scrapingdogUrl = `https://api.scrapingdog.com/scrape?api_key=${apiKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
+        const response = await fetch(scrapingdogUrl);
+        
+        if (!response.ok) {
+          const errorBody = await response.text();
+          console.warn(`[Live Scraper] Gateway response error for page ${page}: ${response.status} - ${errorBody}`);
+          if (response.status === 403) {
+            console.log("[Live Scraper] Quota hit (403). Falling back to direct node fetch...");
+            useDirectFetch = true;
+          } else {
+            if (page === 1) throw new Error(`Gateway response error on page 1: ${response.status} - ${errorBody}`);
+            break; // Stop fetching further pages if we hit an error but page 1 worked
+          }
+        } else {
+          html = await response.text();
+        }
       }
 
-      const html = await response.text();
+      if (useDirectFetch) {
+        console.log(`[Live Scraper] Executing direct fetch for page ${page}...`);
+        const directResponse = await fetch(pageUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          }
+        });
+        if (!directResponse.ok) {
+          if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
+          break;
+        }
+        html = await directResponse.text();
+      }
+
       const $ = cheerio.load(html);
 
       // Strip script tags and styles to extract pure visible text layout strings
