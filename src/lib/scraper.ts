@@ -63,10 +63,12 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
   }
 
   try {
-    const apiKey = process.env.PROXY_API_KEY;
-    if (!apiKey) {
-      throw new Error("PROXY_API_KEY is missing from environment variables");
+    const proxyKey = process.env.PROXY_API_KEY;
+    const dogKey = process.env.SCRAPINGDOG_API_KEY;
+    if (!proxyKey && !dogKey) {
+      throw new Error("PROXY_API_KEY or SCRAPINGDOG_API_KEY is missing from environment variables");
     }
+    const provider = process.env.PROXY_PROVIDER || (proxyKey ? 'zenrows' : 'scrapingdog');
 
     let combinedRawText = "";
     
@@ -86,8 +88,16 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       let html = "";
 
       if (!useDirectFetch) {
-        // ZenRows Enterprise Proxy with JavaScript rendering enabled to bypass Cloudflare blocks
-        const proxyUrl = `https://api.zenrows.com/v1/?apikey=${apiKey}&url=${encodeURIComponent(pageUrl)}&js_render=true`;
+        // Universal Proxy Handler
+        let proxyUrl = "";
+        if (provider === 'scraperapi') {
+          proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        } else if (provider === 'zenrows') {
+          proxyUrl = `https://api.zenrows.com/v1/?apikey=${proxyKey}&url=${encodeURIComponent(pageUrl)}&js_render=true`;
+        } else {
+          proxyUrl = `https://api.scrapingdog.com/scrape?api_key=${dogKey || proxyKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
+        }
+        
         const response = await fetch(proxyUrl);
         
         if (!response.ok) {
