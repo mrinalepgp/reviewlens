@@ -2,6 +2,33 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { fetchMarketplaceReviews } from '@/lib/scraper';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { createClient as createServerClient } from '@/utils/supabase/server';
+
+export async function login(formData: FormData) {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+
+  if (!email || !password) {
+    return { error: 'Email and password are required' };
+  }
+
+  const supabaseServer = await createServerClient();
+
+  const { error } = await supabaseServer.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath('/dashboard');
+  redirect('/dashboard');
+}
+
 
 // Initialize the Supabase production client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
