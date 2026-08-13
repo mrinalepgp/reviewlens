@@ -63,9 +63,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
   }
 
   try {
-    const apiKey = process.env.SCRAPINGDOG_API_KEY;
+    const apiKey = process.env.PROXY_API_KEY;
     if (!apiKey) {
-      throw new Error("SCRAPINGDOG_API_KEY is missing from environment variables");
+      throw new Error("PROXY_API_KEY is missing from environment variables");
     }
 
     let combinedRawText = "";
@@ -86,19 +86,15 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       let html = "";
 
       if (!useDirectFetch) {
-        const scrapingdogUrl = `https://api.scrapingdog.com/scrape?api_key=${apiKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
-        const response = await fetch(scrapingdogUrl);
+        // ZenRows Enterprise Proxy with JavaScript rendering enabled to bypass Cloudflare blocks
+        const proxyUrl = `https://api.zenrows.com/v1/?apikey=${apiKey}&url=${encodeURIComponent(pageUrl)}&js_render=true`;
+        const response = await fetch(proxyUrl);
         
         if (!response.ok) {
           const errorBody = await response.text();
-          console.warn(`[Live Scraper] Gateway response error for page ${page}: ${response.status} - ${errorBody}`);
-          if (response.status === 403) {
-            console.log("[Live Scraper] Quota hit (403). Falling back to direct node fetch...");
-            useDirectFetch = true;
-          } else {
-            if (page === 1) throw new Error(`Gateway response error on page 1: ${response.status} - ${errorBody}`);
-            break; // Stop fetching further pages if we hit an error but page 1 worked
-          }
+          console.warn(`[Live Scraper] Enterprise proxy error for page ${page}: ${response.status} - ${errorBody}`);
+          console.log("[Live Scraper] Primary proxy returned error/quota limit. Falling back to native direct fetch...");
+          useDirectFetch = true;
         } else {
           html = await response.text();
         }
