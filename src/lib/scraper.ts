@@ -114,10 +114,18 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           }
         });
         if (!directResponse.ok) {
+          if (directResponse.status === 403 || directResponse.status === 503) {
+            return { success: false, marketplace, url, reviews: [], error: "Marketplace anti-bot protection triggered. Please retry or update scraping proxies." };
+          }
           if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
           break;
         }
         html = await directResponse.text();
+        
+        // Also check if Cloudflare challenge page is returned with a 200 OK
+        if (html.includes("cf-browser-verification") || html.includes("cloudflare-nginx") || html.includes("Just a moment...")) {
+          return { success: false, marketplace, url, reviews: [], error: "Marketplace anti-bot protection triggered. Please retry or update scraping proxies." };
+        }
       }
 
       const $ = cheerio.load(html);
