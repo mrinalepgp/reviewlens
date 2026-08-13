@@ -47,7 +47,11 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
     for (const url of urls) {
       const scrapeResult = await fetchMarketplaceReviews(url);
 
-      if (!scrapeResult.success || !scrapeResult.reviews.length) {
+      if (!scrapeResult.success) {
+        throw new Error(`Scraping failed for ${url}: ${scrapeResult.error}`);
+      }
+
+      if (!scrapeResult.reviews || !scrapeResult.reviews.length) {
         console.warn(`[Action] No reviews collected for URL: ${url}`);
         continue;
       }

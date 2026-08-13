@@ -86,8 +86,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       const response = await fetch(scrapingdogUrl);
       
       if (!response.ok) {
-        console.warn(`[Live Scraper] Gateway response error for page ${page}: ${response.status}`);
-        if (page === 1) throw new Error(`Gateway response error on page 1: ${response.status}`);
+        const errorBody = await response.text();
+        console.warn(`[Live Scraper] Gateway response error for page ${page}: ${response.status} - ${errorBody}`);
+        if (page === 1) throw new Error(`Gateway response error on page 1: ${response.status} - ${errorBody}`);
         break; // Stop fetching further pages if we hit an error but page 1 worked
       }
 
