@@ -155,15 +155,39 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       generationConfig: { responseMimeType: "application/json" }
     };
 
-    const aiRes = await fetch(aiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(aiPrompt)
-    });
-    
-    if (!aiRes.ok) {
-        const errorText = await aiRes.text();
-        throw new Error(`AI Extraction failed: ${aiRes.status} ${errorText}`);
+    const maxRetries = 3;
+    let attempt = 0;
+    let aiRes;
+    let lastErrorText = "";
+
+    while (attempt <= maxRetries) {
+      aiRes = await fetch(aiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiPrompt)
+      });
+      
+      if (!aiRes.ok) {
+        lastErrorText = await aiRes.text();
+        if (aiRes.status === 429 || aiRes.status === 503) {
+          console.warn(`[Live Scraper] Gemini API returned ${aiRes.status} on attempt ${attempt + 1}: ${lastErrorText}`);
+          if (attempt === maxRetries) {
+            return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Automatically retrying...' };
+          }
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`[Live Scraper] Retrying in ${delay}ms...`);
+          await new Promise(res => setTimeout(res, delay));
+          attempt++;
+          continue;
+        } else {
+          throw new Error(`AI Extraction failed: ${aiRes.status} ${lastErrorText}`);
+        }
+      }
+      break; // Success
+    }
+
+    if (!aiRes || !aiRes.ok) {
+       return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Automatically retrying...' };
     }
 
     const aiData = await aiRes.json();
