@@ -92,10 +92,12 @@ export async function analyzeProductPipeline(url: string) {
 
     // 4. Map and batch insert the analyzed reviews into Supabase
     const reviewsToInsert = scrapingResult.reviews.map(rev => {
-      // Direct sentiment evaluation from rating for safety baseline
-      let sentiment = 'NEUTRAL';
-      if (rev.rating >= 4) sentiment = 'POSITIVE';
-      else if (rev.rating <= 2) sentiment = 'NEGATIVE';
+      // Use Gemini extracted sentiment if available, otherwise fallback to rating logic
+      let sentiment = rev.sentiment && rev.sentiment !== 'NEUTRAL' ? rev.sentiment : 'NEUTRAL';
+      if (!rev.sentiment || rev.sentiment === 'NEUTRAL') {
+        if (rev.rating >= 4) sentiment = 'POSITIVE';
+        else if (rev.rating <= 2) sentiment = 'NEGATIVE';
+      }
 
       // Automatically isolate simple contextual issue tags
       let issueTag = null;
