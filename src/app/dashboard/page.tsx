@@ -359,7 +359,13 @@ export default function Dashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await analyzeUrlsAction(urls);
+      const response = await Promise.race([
+        analyzeUrlsAction(urls),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error("TIMEOUT_45S")), 45000)
+        )
+      ]);
+      
       if (response.success) {
         // Prepend new results to the existing array so the newest are on top
         setResults((prev) => [...response.summaries, ...prev]);
@@ -369,7 +375,11 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       console.error(err);
-      setError("A fatal error occurred during pipeline execution. " + (err.message || ''));
+      if (err.message === "TIMEOUT_45S" || err.message?.includes("504") || err.message?.includes("timeout")) {
+        setError("The request took too long to complete. Please try analyzing a direct product page link or re-submit.");
+      } else {
+        setError("A fatal error occurred during pipeline execution. " + (err.message || ''));
+      }
     } finally {
       setIsLoading(false);
     }

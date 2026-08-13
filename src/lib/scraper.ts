@@ -72,8 +72,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
     let combinedRawText = "";
     
-    // Fetch up to 3 pages for multi-page extraction (Flipkart primarily)
-    const maxPages = marketplace === 'flipkart' ? 3 : 1;
+    // Fetch up to 2 pages for multi-page extraction (Flipkart primarily)
+    const maxPages = marketplace === 'flipkart' ? 2 : 1;
     let useDirectFetch = false;
     
     for (let page = 1; page <= maxPages; page++) {
@@ -98,7 +98,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           proxyUrl = `https://api.scrapingdog.com/scrape?api_key=${dogKey || proxyKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
         }
         
-        const response = await fetch(proxyUrl);
+        const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
         
         if (!response.ok) {
           const errorBody = await response.text();
@@ -113,6 +113,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (useDirectFetch) {
         console.log(`[Live Scraper] Executing direct fetch for page ${page}...`);
         const directResponse = await fetch(pageUrl, {
+          signal: AbortSignal.timeout(12000),
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
