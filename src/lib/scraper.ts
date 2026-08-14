@@ -13,11 +13,20 @@ export interface ReviewPayload {
   sentiment?: string;
 }
 
+export interface EnterpriseIntelligence {
+  productSummary?: any;
+  defectTaxonomy?: any[];
+  vernacularAnalysis?: any[];
+  sellerPlaybook?: any;
+  reviews?: any[];
+}
+
 export interface ScrapingResult {
   success: boolean;
   marketplace: Marketplace;
   url: string;
   reviews: ReviewPayload[];
+  intelligence?: EnterpriseIntelligence;
   error?: string;
 }
 
@@ -175,10 +184,51 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const aiPrompt = {
       contents: [{
         parts: [{
-          text: `You are an expert data extraction engine. Analyze this raw text from a ${marketplace} product page (or multiple pages) and extract as many real user product reviews as you can find (aim for 30-50). Ignore UI buttons, category lists, ads, and system links.
+          text: `You are an expert data extraction engine and e-commerce seller intelligence analyst. Analyze this raw text from a ${marketplace} product page (or multiple pages) and extract as many real user product reviews as you can find (aim for 30-50). Ignore UI buttons, category lists, ads, and system links.
           
-          Return raw JSON array ONLY matching this exact interface format:
-          [{ "rating": number, "title": "string", "content": "string", "author": "string", "date": "string", "sentiment": "POSITIVE" | "NEGATIVE" | "NEUTRAL" }]
+          Strict Tagging Rule: Never tag negative reviews (1-2 stars or defect mentions) as 'NEUTRAL'. Strictly enforce "CRITICAL DEFECT" or "NEGATIVE" for the badge.
+          
+          Return raw JSON ONLY matching this exact Enterprise Seller Intelligence JSON schema:
+          {
+            "productSummary": {
+              "title": "Extracted Title",
+              "returnRiskScore": 74,
+              "riskLevel": "CRITICAL",
+              "estimatedMarginLoss": "24% - 32%",
+              "listingHealthScore": 45
+            },
+            "defectTaxonomy": [
+              {
+                "category": "Sizing & Fit | Material Quality | Catalog Discrepancy | Packaging/Transit",
+                "frequency": "42%",
+                "summary": "Specific recurring issue",
+                "severity": "HIGH"
+              }
+            ],
+            "vernacularAnalysis": [
+              {
+                "originalText": "Hinglish/Regional excerpt",
+                "translatedMeaning": "Decoded English intent",
+                "sentimentIntent": "Frustration / Refund Demand"
+              }
+            ],
+            "sellerPlaybook": {
+              "listingOptimizations": [
+                "Exact sentence to add to description/bullet points to reduce returns"
+              ],
+              "supplierQualityMemo": "Formal defect notice summary to send to manufacturer",
+              "buyerResponseTemplates": "Polite automated recovery reply for 1-star reviews"
+            },
+            "reviews": [
+              {
+                "rating": 1,
+                "title": "Review Title",
+                "comment": "Review body",
+                "badge": "CRITICAL DEFECT",
+                "badgeColor": "red"
+              }
+            ]
+          }
           
           Raw Page Text:
           ${cleanPageText}`
@@ -223,27 +273,35 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     }
 
     const aiData = await aiRes.json();
-    const jsonText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const jsonText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     
-    let parsedReviews: any[] = [];
+    let parsedData: any = {};
     try {
-        parsedReviews = JSON.parse(jsonText);
+        parsedData = JSON.parse(jsonText);
     } catch (e) {
         throw new Error(`Failed to parse JSON from AI: ${jsonText}`);
     }
 
-    const extractedReviews: ReviewPayload[] = parsedReviews.map((rev: any, idx: number) => ({
+    const rawReviews = parsedData.reviews || (Array.isArray(parsedData) ? parsedData : []);
+
+    const extractedReviews: ReviewPayload[] = rawReviews.map((rev: any, idx: number) => ({
       id: `ai_ext_${Date.now()}_${idx}`,
       marketplace,
       rating: Number(rev.rating) || 5,
       title: rev.title || '',
-      content: rev.content || 'No text provided',
+      content: rev.comment || rev.content || 'No text provided',
       author: rev.author || 'Verified Buyer',
       date: rev.date || new Date().toISOString(),
-      sentiment: rev.sentiment || 'NEUTRAL'
+      sentiment: rev.badge || rev.sentiment || 'NEUTRAL'
     }));
 
-    return { success: true, marketplace, url, reviews: extractedReviews };
+    return { 
+      success: true, 
+      marketplace, 
+      url, 
+      reviews: extractedReviews, 
+      intelligence: parsedData 
+    };
 
   } catch (error: any) {
     console.error(`[Live Scraper] Execution Exception:`, error);
