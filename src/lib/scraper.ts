@@ -11,6 +11,7 @@ export interface ReviewPayload {
   author: string;
   date: string;
   sentiment?: string;
+  isSuspicious?: boolean;
 }
 
 export interface EnterpriseIntelligence {
@@ -20,6 +21,7 @@ export interface EnterpriseIntelligence {
   sellerPlaybook?: any;
   reviews?: any[];
   suggestedCompetitors?: any[];
+  authenticityRadar?: any;
 }
 
 export interface ScrapingResult {
@@ -226,7 +228,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
                 "title": "Review Title",
                 "comment": "Review body",
                 "badge": "CRITICAL DEFECT",
-                "badgeColor": "red"
+                "badgeColor": "red",
+                "isSuspicious": true
               }
             ],
             "suggestedCompetitors": [
@@ -237,7 +240,23 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
                 "price": "₹899",
                 "reason": "Top Category Best-Seller"
               }
-            ]
+            ],
+            "authenticityRadar": {
+              "authenticityScore": 88,
+              "attackRiskLevel": "LOW | MEDIUM | HIGH",
+              "suspiciousReviewCount": 3,
+              "flaggedPatterns": [
+                {
+                  "type": "Velocity Spike | Semantic Copycat | Unverified Account Cluster",
+                  "description": "3 identical 1-star reviews posted in tight window with generic negative phrasing",
+                  "severity": "HIGH"
+                }
+              ],
+              "marketplaceDisputeDraft": {
+                "subject": "Urgent: Investigation Request for Coordinated Malicious Review Attack on SKU [ID]",
+                "body": "Formal support ticket text citing marketplace community guidelines, flagging suspicious reviews, and requesting immediate review audit/removal."
+              }
+            }
           }
           
           Raw Page Text:
@@ -302,7 +321,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       content: rev.comment || rev.content || 'No text provided',
       author: rev.author || 'Verified Buyer',
       date: rev.date || new Date().toISOString(),
-      sentiment: rev.badge || rev.sentiment || 'NEUTRAL'
+      sentiment: rev.badge || rev.sentiment || 'NEUTRAL',
+      isSuspicious: !!rev.isSuspicious
     }));
 
     return { 

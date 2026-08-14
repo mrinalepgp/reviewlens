@@ -221,7 +221,7 @@ function ExecutiveIntelligenceConsoleModal({
   product: AnalyzedProductSummary;
   onClose: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors'>('diagnostics');
+  const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors' | 'shield'>('diagnostics');
   const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'NEGATIVE' | 'POSITIVE'>('ALL');
   
   // Competitor Radar State
@@ -399,7 +399,8 @@ function ExecutiveIntelligenceConsoleModal({
                 { id: 'playbook', label: 'Mitigation Playbook' },
                 { id: 'vernacular', label: 'Vernacular Decoder' },
                 { id: 'reviews', label: 'Review Stream' },
-                { id: 'competitors', label: 'Competitor Radar' }
+                { id: 'competitors', label: 'Competitor Radar' },
+                { id: 'shield', label: 'Shield Radar (Authenticity)' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -533,15 +534,22 @@ function ExecutiveIntelligenceConsoleModal({
                   
                   <div className="grid gap-4">
                     {filteredReviews.map((rev: any, idx: number) => (
-                      <div key={idx} className="bg-black/40 border border-white/5 hover:border-white/10 transition-colors rounded-xl p-5 flex flex-col gap-3">
+                      <div key={idx} className={`bg-black/40 border transition-colors rounded-xl p-5 flex flex-col gap-3 relative ${
+                        rev.isSuspicious ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.1)]' : 'border-white/5 hover:border-white/10'
+                      }`}>
+                        {rev.isSuspicious && (
+                          <div className="absolute -top-3 -right-2 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded shadow-lg border border-rose-400 z-10 flex items-center gap-1">
+                            <span>⚠️</span> SUSPICIOUS / ATTACK
+                          </div>
+                        )}
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-sm bg-neutral-800 px-2 py-1 rounded-md text-neutral-200 font-bold border border-white/5 shadow-sm">
                               ⭐ {rev.rating}
                             </span>
-                            <span className="text-sm font-semibold text-white">{rev.title}</span>
+                            <span className="text-sm font-semibold text-white pr-4">{rev.title}</span>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded font-bold uppercase tracking-wider ${
+                          <span className={`text-xs px-2 py-1 rounded font-bold uppercase tracking-wider whitespace-nowrap ${
                             rev.badge === 'CRITICAL DEFECT' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
                             rev.badge === 'NEGATIVE' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
                             rev.badge === 'POSITIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
@@ -709,6 +717,89 @@ function ExecutiveIntelligenceConsoleModal({
                         </div>
                       </div>
                     </>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 6: Shield Radar */}
+              {activeTab === 'shield' && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {intelligence.authenticityRadar ? (
+                    <>
+                      {/* Authenticity Gauge */}
+                      <div className="bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex flex-col gap-1">
+                          <h4 className="text-lg font-bold text-white">Review Authenticity Score</h4>
+                          <p className="text-sm text-neutral-400">AI analysis of review timing, language repetition, and sentiment anomalies.</p>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <div className="flex flex-col items-end">
+                            <span className="text-3xl font-black text-white tabular-nums">{intelligence.authenticityRadar.authenticityScore}</span>
+                            <span className="text-xs text-neutral-500 uppercase tracking-wider font-semibold">/ 100</span>
+                          </div>
+                          <div className={`px-4 py-2 rounded-full text-sm font-bold uppercase tracking-wider border flex items-center gap-2 ${
+                            intelligence.authenticityRadar.attackRiskLevel === 'HIGH' 
+                              ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                              : intelligence.authenticityRadar.attackRiskLevel === 'MEDIUM'
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {intelligence.authenticityRadar.attackRiskLevel === 'HIGH' ? '🔴 High Attack Probability' : intelligence.authenticityRadar.attackRiskLevel === 'MEDIUM' ? '🟠 Medium Risk' : '🟢 Natural Sentiment'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Flagged Anomaly Cards */}
+                      {intelligence.authenticityRadar.flaggedPatterns && intelligence.authenticityRadar.flaggedPatterns.length > 0 && (
+                        <div className="flex flex-col gap-4">
+                          <h4 className="text-sm font-semibold text-white uppercase tracking-wider">Flagged Anomalies ({intelligence.authenticityRadar.suspiciousReviewCount} Reviews Affected)</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {intelligence.authenticityRadar.flaggedPatterns.map((pattern: any, idx: number) => (
+                              <div key={idx} className={`border rounded-xl p-5 ${
+                                pattern.severity === 'HIGH' ? 'bg-rose-500/5 border-rose-500/20' : 'bg-amber-500/5 border-amber-500/20'
+                              }`}>
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className={`text-xs font-bold px-2 py-1 rounded border ${
+                                    pattern.severity === 'HIGH' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  }`}>{pattern.type}</span>
+                                </div>
+                                <p className="text-sm text-neutral-300 mt-3 leading-relaxed">{pattern.description}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Marketplace Dispute Ticket */}
+                      {intelligence.authenticityRadar.marketplaceDisputeDraft && (
+                        <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-6 mt-2">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">Marketplace Dispute Ticket</h4>
+                              <p className="text-xs text-neutral-400 mt-1">Ready-to-send draft for Seller Support.</p>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const draft = `Subject: ${intelligence.authenticityRadar.marketplaceDisputeDraft.subject}\n\n${intelligence.authenticityRadar.marketplaceDisputeDraft.body}`;
+                                navigator.clipboard.writeText(draft);
+                              }}
+                              className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1.5"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                              Copy Support Ticket
+                            </button>
+                          </div>
+                          <div className="bg-black/60 rounded-lg p-4 border border-white/5 font-mono text-sm text-neutral-300">
+                            <p className="font-semibold text-white mb-2">Subject: {intelligence.authenticityRadar.marketplaceDisputeDraft.subject}</p>
+                            <p className="whitespace-pre-wrap text-neutral-400">{intelligence.authenticityRadar.marketplaceDisputeDraft.body}</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-20 text-neutral-500 border border-dashed border-white/10 rounded-xl">
+                      Authenticity Radar data not available for this snapshot.
+                    </div>
                   )}
                 </div>
               )}
