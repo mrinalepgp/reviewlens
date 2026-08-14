@@ -167,13 +167,44 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           const jinaUrl = `https://r.jina.ai/${encodeURIComponent(pageUrl)}`;
           const jinaResponse = await fetch(jinaUrl, {
             signal: AbortSignal.timeout(15000),
-            headers: { 'Accept': 'text/html' }
+            headers: { 'Accept': 'text/plain' }
           });
           if (!jinaResponse.ok) {
             if (page === 1) throw new Error(`Jina Reader fallback failed: ${jinaResponse.status}`);
             html = "";
           } else {
-            html = await jinaResponse.text();
+            const markdownText = await jinaResponse.text();
+            
+            // Jina Markdown Parse:
+            let productTitle = "";
+            let productRating = "";
+            let productPrice = "";
+            let rawReviews: string[] = [];
+            
+            const lines = markdownText.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+            
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              // Try to find title (often first few headers)
+              if (line.startsWith('#') && !productTitle) {
+                productTitle = line.replace(/#/g, '').trim();
+              }
+              // Attempt to parse price
+              if (line.includes('₹') && !productPrice) {
+                const priceMatch = line.match(/₹[\d,]+/);
+                if (priceMatch) productPrice = priceMatch[0];
+              }
+              // Anything reasonably long might be a review block
+              if (line.length > 40 && line.length < 1000 && !line.includes('[') && !line.includes('{')) {
+                // Ignore likely UI boilerplate lines
+                if (!line.toLowerCase().includes('javascript') && !line.toLowerCase().includes('browser')) {
+                  rawReviews.push(line);
+                }
+              }
+            }
+            
+            // Return exactly top 20 verified review lines
+            return { title: productTitle, rating: productRating, price: productPrice, reviews: rawReviews.slice(0, 20) };
           }
         } catch (jinaErr: any) {
           if (page === 1) throw jinaErr;

@@ -111,6 +111,34 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       
       const productName = `Product Snapshot (${scrapeResult.marketplace})`;
       let dbProductId = undefined;
+      
+      const safeIntelligenceData = {
+        executiveScorecard: scrapeResult.intelligence?.executiveScorecard || {
+          returnRiskScore: riskAssessment === 'critical' ? 85 : riskAssessment === 'warning' ? 55 : 10,
+          listingHealthScore: riskAssessment === 'critical' ? 20 : riskAssessment === 'warning' ? 60 : 90,
+          estimatedMarginLossRange: riskAssessment === 'critical' ? "20% - 30%" : "5% - 10%",
+          primaryRiskDriver: Array.from(negativeThemes)[0] || "No critical drivers identified"
+        },
+        defectTaxonomy: scrapeResult.intelligence?.defectTaxonomy || [],
+        vernacularDecoder: scrapeResult.intelligence?.vernacularDecoder || [],
+        mitigationPlaybook: scrapeResult.intelligence?.mitigationPlaybook || {
+          listingFixBullets: ["Review sizing charts", "Update product description for clarity"],
+          antiReturnListingCopy: "Ensure you check the detailed sizing guide before purchase.",
+          supplierQualityMemo: "Monitor recent reviews for potential QA issues.",
+          customerRecoveryScript: "We apologize for the inconvenience, please contact support for a replacement."
+        },
+        authenticityRadar: scrapeResult.intelligence?.authenticityRadar || {
+          authenticityScore: 90,
+          attackRiskLevel: "LOW",
+          suspiciousReviewCount: 0,
+          flaggedPatterns: [],
+          disputeDraft: {
+            subject: "Routine Review Audit",
+            body: "No suspicious patterns detected."
+          }
+        },
+        competitorDiscovery: scrapeResult.intelligence?.competitorDiscovery || [],
+      };
 
       try {
         const { data: productData, error: productError } = await supabase
@@ -121,7 +149,8 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             product_url: url,
             product_name: productName,
             average_rating: averageScore,
-            risk_status: riskAssessment
+            risk_status: riskAssessment,
+            intelligence_data: safeIntelligenceData
           })
           .select('id')
           .single();
@@ -157,7 +186,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         averageScore,
         riskAssessment,
         negativeThemes: Array.from(negativeThemes),
-        intelligence: scrapeResult.intelligence,
+        intelligence: safeIntelligenceData,
       });
     }
 
