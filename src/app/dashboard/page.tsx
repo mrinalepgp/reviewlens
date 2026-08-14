@@ -81,6 +81,23 @@ function IngestionCard({
   isLoading: boolean;
 }) {
   const [inputText, setInputText] = useState("");
+  const [loadingText, setLoadingText] = useState("Parsing product reviews...");
+
+  useEffect(() => {
+    if (!isLoading) return;
+    const texts = [
+      "Parsing product reviews...",
+      "Analyzing return risk vectors...",
+      "Compiling seller playbook..."
+    ];
+    let i = 0;
+    setLoadingText(texts[0]);
+    const interval = setInterval(() => {
+      i = (i + 1) % texts.length;
+      setLoadingText(texts[i]);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const handleStart = () => {
     if (!inputText.trim()) return;
@@ -115,7 +132,7 @@ function IngestionCard({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Analyzing reviews...
+              {loadingText}
             </>
           ) : (
             '⚡ Start AI Analysis'
@@ -253,7 +270,7 @@ function ExecutiveIntelligenceConsoleModal({
     );
   }
 
-  const { productSummary, defectTaxonomy, vernacularAnalysis, sellerPlaybook, reviews } = intelligence;
+  const { executiveScorecard, defectTaxonomy, vernacularDecoder, mitigationPlaybook, reviews } = intelligence;
   
   // Helpers
   const getSeverityColor = (score: number, inverse = false) => {
@@ -273,7 +290,7 @@ function ExecutiveIntelligenceConsoleModal({
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
   };
   
-  const riskScore = productSummary?.returnRiskScore || 0;
+  const riskScore = executiveScorecard?.returnRiskScore || 0;
   const projectedBleed = monthlyUnits * (riskScore / 100) * returnCost;
   const recoverableMargin = projectedBleed * 0.40;
 
@@ -290,7 +307,7 @@ function ExecutiveIntelligenceConsoleModal({
               </div>
               <span className="text-xs text-neutral-500 uppercase tracking-wider">{product.platform}</span>
             </div>
-            <h3 className="text-2xl font-bold text-white tracking-tight">{productSummary?.title || product.title}</h3>
+            <h3 className="text-2xl font-bold text-white tracking-tight">{product.title}</h3>
           </div>
           <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5">
             ✕
@@ -301,23 +318,23 @@ function ExecutiveIntelligenceConsoleModal({
           
           {/* Top KPI Ribbon */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(productSummary?.returnRiskScore || 0)}`}>
+            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(executiveScorecard?.returnRiskScore || 0)}`}>
               <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Return Probability Index</span>
               <div className="flex items-end gap-2">
-                <span className="text-4xl font-black tabular-nums">{productSummary?.returnRiskScore || 0}</span>
+                <span className="text-4xl font-black tabular-nums">{executiveScorecard?.returnRiskScore || 0}</span>
                 <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
               </div>
             </div>
             
             <div className="p-5 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md flex flex-col gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Estimated Margin Loss</span>
-              <span className="text-4xl font-black text-white tabular-nums">{productSummary?.estimatedMarginLoss || "N/A"}</span>
+              <span className="text-4xl font-black text-white tabular-nums">{executiveScorecard?.estimatedMarginLossRange || "N/A"}</span>
             </div>
             
-            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(productSummary?.listingHealthScore || 0, true)}`}>
+            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(executiveScorecard?.listingHealthScore || 0, true)}`}>
               <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Listing Health Score</span>
               <div className="flex items-end gap-2">
-                <span className="text-4xl font-black tabular-nums">{productSummary?.listingHealthScore || 0}</span>
+                <span className="text-4xl font-black tabular-nums">{executiveScorecard?.listingHealthScore || 0}</span>
                 <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
               </div>
             </div>
@@ -428,16 +445,16 @@ function ExecutiveIntelligenceConsoleModal({
                         <div className="flex justify-between items-start z-10">
                           <div>
                             <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{defect.category}</span>
-                            <p className="text-neutral-200 mt-1 font-medium">{defect.summary}</p>
+                            <p className="text-neutral-200 mt-1 font-medium">{defect.description}</p>
                           </div>
                           <span className={`text-xs px-2 py-1 rounded font-bold ${defect.severity === 'HIGH' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}`}>
                             {defect.severity} SEVERITY
                           </span>
                         </div>
                         <div className="flex items-center gap-3 z-10 mt-2">
-                          <span className="text-sm text-neutral-400 w-12">{defect.frequency}</span>
+                          <span className="text-sm text-neutral-400 w-12">{defect.frequencyPercent}%</span>
                           <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: defect.frequency }}></div>
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${defect.frequencyPercent}%` }}></div>
                           </div>
                         </div>
                       </div>
@@ -452,7 +469,7 @@ function ExecutiveIntelligenceConsoleModal({
                 <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <div className="flex flex-col gap-3">
                     <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Listing Optimizations</h4>
-                    {sellerPlaybook?.listingOptimizations?.map((opt: string, idx: number) => (
+                    {mitigationPlaybook?.listingFixBullets?.map((opt: string, idx: number) => (
                       <div key={idx} className="flex items-center justify-between bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-4 group hover:bg-indigo-500/10 transition-colors">
                         <p className="text-neutral-200 text-sm font-medium">{opt}</p>
                         <button onClick={() => navigator.clipboard.writeText(opt)} className="text-indigo-400 p-2 rounded-lg hover:bg-indigo-500/20 opacity-0 group-hover:opacity-100 transition-all">
@@ -466,8 +483,8 @@ function ExecutiveIntelligenceConsoleModal({
                     <div className="flex flex-col gap-3">
                       <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Supplier Quality Memo</h4>
                       <div className="bg-black/40 border border-white/5 rounded-xl p-5 relative group text-sm text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap">
-                        {sellerPlaybook?.supplierQualityMemo}
-                        <button onClick={() => navigator.clipboard.writeText(sellerPlaybook?.supplierQualityMemo || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
+                        {mitigationPlaybook?.supplierQualityMemo}
+                        <button onClick={() => navigator.clipboard.writeText(mitigationPlaybook?.supplierQualityMemo || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
                           Copy
                         </button>
                       </div>
@@ -475,8 +492,8 @@ function ExecutiveIntelligenceConsoleModal({
                     <div className="flex flex-col gap-3">
                       <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Buyer Response Template</h4>
                       <div className="bg-black/40 border border-white/5 rounded-xl p-5 relative group text-sm text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap">
-                        {sellerPlaybook?.buyerResponseTemplates}
-                        <button onClick={() => navigator.clipboard.writeText(sellerPlaybook?.buyerResponseTemplates || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
+                        {mitigationPlaybook?.customerRecoveryScript}
+                        <button onClick={() => navigator.clipboard.writeText(mitigationPlaybook?.customerRecoveryScript || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
                           Copy
                         </button>
                       </div>
@@ -490,25 +507,25 @@ function ExecutiveIntelligenceConsoleModal({
                 <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <h4 className="text-lg font-semibold text-white">Vernacular Intent Decoder</h4>
                   <div className="grid gap-4">
-                    {vernacularAnalysis?.map((item: any, idx: number) => (
+                    {vernacularDecoder?.map((item: any, idx: number) => (
                       <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
                         <div className="flex flex-col gap-1">
                           <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Original Raw Text</span>
-                          <p className="text-neutral-300 italic">"{item.originalText}"</p>
+                          <p className="text-neutral-300 italic">"{item.rawVernacularText}"</p>
                         </div>
                         <div className="flex flex-col gap-1 md:border-l md:border-white/10 md:pl-6">
                           <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Decoded Intent</span>
-                          <p className="text-indigo-300 font-medium">{item.translatedMeaning}</p>
+                          <p className="text-indigo-300 font-medium">{item.decodedIntent}</p>
                         </div>
                         <div className="flex flex-col gap-1 md:border-l md:border-white/10 md:pl-6">
                           <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Business Impact</span>
                           <span className="inline-flex w-fit items-center px-2.5 py-1 rounded-md text-xs font-bold bg-white/5 text-neutral-200 border border-white/10 shadow-sm mt-1">
-                            {item.sentimentIntent}
+                            {item.businessImpactCategory}
                           </span>
                         </div>
                       </div>
                     ))}
-                    {!vernacularAnalysis?.length && <p className="text-neutral-500 italic">No vernacular patterns detected.</p>}
+                    {!vernacularDecoder?.length && <p className="text-neutral-500 italic">No vernacular patterns detected.</p>}
                   </div>
                 </div>
               )}
@@ -662,34 +679,18 @@ function ExecutiveIntelligenceConsoleModal({
                       </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {intelligence?.suggestedCompetitors?.map((comp: any, idx: number) => (
-                          <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 flex flex-col justify-between gap-4 hover:border-white/20 transition-all group">
+                        {intelligence?.competitorDiscovery?.map((comp: any, idx: number) => (
+                          <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 flex flex-col justify-between gap-4">
                             <div>
                               <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded border border-indigo-500/20">{comp.reason}</span>
-                                <span className="text-sm font-semibold bg-white/5 px-2 py-1 rounded text-white">{comp.price}</span>
+                                <span className="text-xs font-bold bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded border border-indigo-500/20">{comp.targetCompetitorCategory}</span>
                               </div>
-                              <h5 className="font-medium text-neutral-200 line-clamp-2">{comp.title}</h5>
-                              <p className="text-sm text-neutral-500 mt-2">Rating: ⭐ {comp.rating}</p>
+                              <h5 className="font-medium text-neutral-200 line-clamp-2">{comp.suggestedSearchKeyword}</h5>
+                              <p className="text-sm text-neutral-500 mt-2">Target Keyword for Ads/SEO</p>
                             </div>
-                            <button 
-                              onClick={async () => {
-                                setIsComparing(true);
-                                const res = await compareCompetitorAction(intelligence, comp.url);
-                                if (res.success) setComparisonResult(res.matrix);
-                                setIsComparing(false);
-                              }}
-                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                              <span>⚔️</span> Analyze Against This Rival
-                            </button>
                           </div>
                         ))}
-                        {(!intelligence?.suggestedCompetitors || intelligence.suggestedCompetitors.length === 0) && (
-                          <div className="col-span-full py-10 text-center border border-dashed border-white/10 rounded-xl text-neutral-500">
-                            No auto-discovered competitors found for this product.
-                          </div>
-                        )}
+                        {!intelligence?.competitorDiscovery?.length && <p className="text-neutral-500 italic col-span-2">No competitor targets discovered.</p>}
                       </div>
 
                       <div className="mt-8 pt-8 border-t border-white/10">
@@ -771,7 +772,7 @@ function ExecutiveIntelligenceConsoleModal({
                       )}
 
                       {/* Marketplace Dispute Ticket */}
-                      {intelligence.authenticityRadar.marketplaceDisputeDraft && (
+                      {intelligence.authenticityRadar.disputeDraft && (
                         <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-6 mt-2">
                           <div className="flex justify-between items-start mb-4">
                             <div>
@@ -780,7 +781,7 @@ function ExecutiveIntelligenceConsoleModal({
                             </div>
                             <button 
                               onClick={() => {
-                                const draft = `Subject: ${intelligence.authenticityRadar.marketplaceDisputeDraft.subject}\n\n${intelligence.authenticityRadar.marketplaceDisputeDraft.body}`;
+                                const draft = `Subject: ${intelligence.authenticityRadar.disputeDraft.subject}\n\n${intelligence.authenticityRadar.disputeDraft.body}`;
                                 navigator.clipboard.writeText(draft);
                               }}
                               className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-xs font-medium transition-colors flex items-center gap-1.5"
@@ -790,8 +791,8 @@ function ExecutiveIntelligenceConsoleModal({
                             </button>
                           </div>
                           <div className="bg-black/60 rounded-lg p-4 border border-white/5 font-mono text-sm text-neutral-300">
-                            <p className="font-semibold text-white mb-2">Subject: {intelligence.authenticityRadar.marketplaceDisputeDraft.subject}</p>
-                            <p className="whitespace-pre-wrap text-neutral-400">{intelligence.authenticityRadar.marketplaceDisputeDraft.body}</p>
+                            <p className="font-semibold text-white mb-2">Subject: {intelligence.authenticityRadar.disputeDraft.subject}</p>
+                            <p className="whitespace-pre-wrap text-neutral-400">{intelligence.authenticityRadar.disputeDraft.body}</p>
                           </div>
                         </div>
                       )}

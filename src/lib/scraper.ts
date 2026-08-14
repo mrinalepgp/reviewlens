@@ -15,13 +15,12 @@ export interface ReviewPayload {
 }
 
 export interface EnterpriseIntelligence {
-  productSummary?: any;
+  executiveScorecard?: any;
   defectTaxonomy?: any[];
-  vernacularAnalysis?: any[];
-  sellerPlaybook?: any;
-  reviews?: any[];
-  suggestedCompetitors?: any[];
+  vernacularDecoder?: any[];
+  mitigationPlaybook?: any;
   authenticityRadar?: any;
+  competitorDiscovery?: any[];
 }
 
 export interface ScrapingResult {
@@ -38,9 +37,11 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
     const urlObj = new URL(url);
     if (marketplace === 'flipkart') {
       const pid = urlObj.searchParams.get('pid');
+      const lid = urlObj.searchParams.get('lid');
       // Strip out volatile tracking query strings (otracker, fm, iid, ppt)
       urlObj.search = '';
       if (pid) urlObj.searchParams.set('pid', pid);
+      if (lid) urlObj.searchParams.set('lid', lid);
       
       // Transform /p/itm to /product-reviews/itm
       if (urlObj.pathname.includes('/p/itm')) {
@@ -194,35 +195,60 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           
           Return raw JSON ONLY matching this exact Enterprise Seller Intelligence JSON schema:
           {
-            "productSummary": {
-              "title": "Extracted Title",
+            "executiveScorecard": {
               "returnRiskScore": 74,
-              "riskLevel": "CRITICAL",
-              "estimatedMarginLoss": "24% - 32%",
-              "listingHealthScore": 45
+              "listingHealthScore": 45,
+              "estimatedMarginLossRange": "24% - 32%",
+              "primaryRiskDriver": "Sizing & Fit"
             },
             "defectTaxonomy": [
               {
-                "category": "Sizing & Fit | Material Quality | Catalog Discrepancy | Packaging/Transit",
-                "frequency": "42%",
-                "summary": "Specific recurring issue",
-                "severity": "HIGH"
+                "category": "Sizing & Fit",
+                "subIssue": "Runs small across shoulders",
+                "frequencyPercent": 42,
+                "severity": "HIGH",
+                "description": "Specific recurring issue detailed",
+                "customerQuoteSnippet": "Could barely fit my arms..."
               }
             ],
-            "vernacularAnalysis": [
+            "vernacularDecoder": [
               {
-                "originalText": "Hinglish/Regional excerpt",
-                "translatedMeaning": "Decoded English intent",
-                "sentimentIntent": "Frustration / Refund Demand"
+                "rawVernacularText": "Hinglish/Regional excerpt",
+                "detectedLanguage": "Hinglish",
+                "decodedIntent": "Decoded English intent",
+                "businessImpactCategory": "Frustration / Refund Demand"
               }
             ],
-            "sellerPlaybook": {
-              "listingOptimizations": [
-                "Exact sentence to add to description/bullet points to reduce returns"
+            "mitigationPlaybook": {
+              "listingFixBullets": [
+                "Exact sentence to add to description to reduce returns"
               ],
+              "antiReturnListingCopy": "Important sizing note for customers",
               "supplierQualityMemo": "Formal defect notice summary to send to manufacturer",
-              "buyerResponseTemplates": "Polite automated recovery reply for 1-star reviews"
+              "customerRecoveryScript": "Polite automated recovery reply for 1-star reviews"
             },
+            "authenticityRadar": {
+              "authenticityScore": 88,
+              "attackRiskLevel": "LOW",
+              "suspiciousReviewCount": 3,
+              "flaggedPatterns": [
+                {
+                  "type": "Velocity Spike",
+                  "description": "3 identical 1-star reviews posted in tight window",
+                  "severity": "HIGH"
+                }
+              ],
+              "disputeDraft": {
+                "subject": "Urgent: Investigation Request for Coordinated Malicious Review Attack",
+                "body": "Formal support ticket text citing marketplace community guidelines, flagging suspicious reviews, and requesting immediate review audit/removal."
+              }
+            },
+            "competitorDiscovery": [
+              {
+                "suggestedSearchKeyword": "Polarized Aviator Sunglasses",
+                "targetCompetitorCategory": "Top Category Best-Seller"
+              }
+            ],
             "reviews": [
               {
                 "rating": 1,
@@ -232,32 +258,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
                 "badgeColor": "red",
                 "isSuspicious": true
               }
-            ],
-            "suggestedCompetitors": [
-              {
-                "title": "Fastrack Polarized Aviator Sunglasses",
-                "url": "https://www.flipkart.com/...",
-                "rating": 4.2,
-                "price": "₹899",
-                "reason": "Top Category Best-Seller"
-              }
-            ],
-            "authenticityRadar": {
-              "authenticityScore": 88,
-              "attackRiskLevel": "LOW | MEDIUM | HIGH",
-              "suspiciousReviewCount": 3,
-              "flaggedPatterns": [
-                {
-                  "type": "Velocity Spike | Semantic Copycat | Unverified Account Cluster",
-                  "description": "3 identical 1-star reviews posted in tight window with generic negative phrasing",
-                  "severity": "HIGH"
-                }
-              ],
-              "marketplaceDisputeDraft": {
-                "subject": "Urgent: Investigation Request for Coordinated Malicious Review Attack on SKU [ID]",
-                "body": "Formal support ticket text citing marketplace community guidelines, flagging suspicious reviews, and requesting immediate review audit/removal."
-              }
-            }
+            ]
           }
           
           Raw Page Text:
@@ -286,8 +287,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           if (attempt === maxRetries) {
             return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Please try again in a few moments.' };
           }
-          // Exponential backoff with jitter (1.5s -> 3s)
-          const baseDelay = attempt === 0 ? 1500 : 3000;
+          // Enterprise backoff handler: 1.5s, 3s, 5s delay sequence
+          const delaySequence = [1500, 3000, 5000];
+          const baseDelay = delaySequence[attempt] || 5000;
           const jitter = Math.floor(Math.random() * 500);
           const delay = baseDelay + jitter;
           console.log(`[Live Scraper] Retrying in ${delay}ms...`);
