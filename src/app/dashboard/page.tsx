@@ -214,135 +214,270 @@ function RiskRadar({
   );
 }
 
-function ReviewDetailModal({
+function ExecutiveIntelligenceConsoleModal({
   product,
   onClose
 }: {
   product: AnalyzedProductSummary;
   onClose: () => void;
 }) {
-  const [reviews, setReviews] = useState<ReviewAnalysisRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews'>('diagnostics');
+  const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'NEGATIVE' | 'POSITIVE'>('ALL');
+  
+  const intelligence = product.intelligence;
+  
+  if (!intelligence) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-md p-6 flex flex-col shadow-2xl items-center text-center">
+          <div className="text-rose-400 mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-white mb-2">Intelligence Data Unavailable</h3>
+          <p className="text-sm text-neutral-400 mb-6">The detailed Enterprise Seller Intelligence schema is not available for this product snapshot. It might be an older scan or the AI extraction failed.</p>
+          <button onClick={onClose} className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm font-medium">Close Console</button>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    if (product.id) {
-      fetchProductReviewsAction(product.id).then((res) => {
-        if (res.success) setReviews(res.reviews);
-        setIsLoading(false);
-      });
-    } else {
-      setIsLoading(false);
-    }
-  }, [product.id]);
-
-  // Aggregate issues for the chart
-  const issueCounts: Record<string, number> = {};
-  reviews.forEach(r => {
-    if (r.ai_extracted_issue && r.ai_extracted_issue !== 'none' && r.ai_extracted_issue !== 'analysis_error') {
-      issueCounts[r.ai_extracted_issue] = (issueCounts[r.ai_extracted_issue] || 0) + 1;
-    }
-  });
-
-  const chartData = Object.keys(issueCounts).map(issue => ({
-    name: issue,
-    count: issueCounts[issue]
-  })).sort((a, b) => b.count - a.count);
+  const { productSummary, defectTaxonomy, vernacularAnalysis, sellerPlaybook, reviews } = intelligence;
+  
+  // Helpers
+  const getSeverityColor = (score: number, inverse = false) => {
+    // If inverse, higher score is better (e.g. Health Score). If normal, higher score is worse (e.g. Risk Score)
+    const isBad = inverse ? score < 50 : score > 70;
+    const isWarning = inverse ? (score >= 50 && score < 80) : (score > 30 && score <= 70);
+    
+    if (isBad) return 'text-rose-400 border-rose-500/30 bg-rose-500/10 shadow-[0_0_15px_rgba(244,63,94,0.1)]';
+    if (isWarning) return 'text-amber-400 border-amber-500/30 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+    return 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.1)]';
+  };
+  
+  const filteredReviews = reviews?.filter((r: any) => reviewFilter === 'ALL' || r.badge === reviewFilter) || [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-white/10 shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
+      <div className="bg-neutral-950 border border-white/10 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-white/5">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent shrink-0">
           <div>
-            <h3 className="text-xl font-bold text-white">{product.title}</h3>
-            <p className="text-sm text-indigo-400 mt-1">AI Extracted Reviews Dashboard</p>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                EXECUTIVE CONSOLE
+              </div>
+              <span className="text-xs text-neutral-500 uppercase tracking-wider">{product.platform}</span>
+            </div>
+            <h3 className="text-2xl font-bold text-white tracking-tight">{productSummary?.title || product.title}</h3>
           </div>
-          <button 
-            onClick={onClose} 
-            className="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-          >
+          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5">
             ✕
           </button>
         </div>
         
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-6">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-32">
-              <svg className="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
+        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-8 custom-scrollbar">
+          
+          {/* Top KPI Ribbon */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(productSummary?.returnRiskScore || 0)}`}>
+              <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Return Probability Index</span>
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-black tabular-nums">{productSummary?.returnRiskScore || 0}</span>
+                <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
+              </div>
             </div>
-          ) : !product.id ? (
-            <div className="text-center text-rose-400 py-10 bg-rose-500/10 rounded-xl border border-rose-500/20">
-              No database ID found for this product. Make sure Supabase keys are configured properly in .env.local.
+            
+            <div className="p-5 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md flex flex-col gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Estimated Margin Loss</span>
+              <span className="text-4xl font-black text-white tabular-nums">{productSummary?.estimatedMarginLoss || "N/A"}</span>
             </div>
-          ) : reviews.length === 0 ? (
-            <div className="text-center text-neutral-400 py-10">No reviews found in database for this analysis batch.</div>
-          ) : (
-            <>
-              {/* Visual Analytics Chart */}
-              {chartData.length > 0 && (
-                <div className="bg-black/50 border border-white/5 rounded-xl p-5 shadow-[0_0_20px_rgba(79,70,229,0.05)]">
-                  <h4 className="text-sm font-semibold text-neutral-200 mb-4 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    Issue Distribution
-                  </h4>
-                  <div className="h-56 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <XAxis dataKey="name" tick={{fill: '#9ca3af', fontSize: 12}} axisLine={false} tickLine={false} />
-                        <YAxis tick={{fill: '#9ca3af', fontSize: 12}} axisLine={false} tickLine={false} />
-                        <Tooltip 
-                          cursor={{fill: 'rgba(255,255,255,0.05)'}} 
-                          contentStyle={{backgroundColor: '#171717', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)'}} 
-                          itemStyle={{color: '#818cf8', fontWeight: 'bold'}}
-                          labelStyle={{color: '#d1d5db', marginBottom: '4px'}}
-                        />
-                        <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                          {
-                            chartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill="#6366f1" style={{ filter: 'drop-shadow(0px 0px 8px rgba(99,102,241,0.6))' }} />
-                            ))
-                          }
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+            
+            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(productSummary?.listingHealthScore || 0, true)}`}>
+              <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Listing Health Score</span>
+              <div className="flex items-end gap-2">
+                <span className="text-4xl font-black tabular-nums">{productSummary?.listingHealthScore || 0}</span>
+                <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Tabs */}
+          <div className="flex flex-col gap-4">
+            <div className="flex space-x-1 bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
+              {[
+                { id: 'diagnostics', label: 'Root-Cause' },
+                { id: 'playbook', label: 'Mitigation Playbook' },
+                { id: 'vernacular', label: 'Vernacular Decoder' },
+                { id: 'reviews', label: 'Review Stream' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    activeTab === tab.id 
+                    ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' 
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-white/5'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 min-h-[300px]">
+              
+              {/* Tab 1: Diagnostics */}
+              {activeTab === 'diagnostics' && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <h4 className="text-lg font-semibold text-white">Defect Taxonomy</h4>
+                  <div className="grid gap-4">
+                    {defectTaxonomy?.map((defect: any, idx: number) => (
+                      <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 flex flex-col gap-3 relative overflow-hidden">
+                        <div className="flex justify-between items-start z-10">
+                          <div>
+                            <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">{defect.category}</span>
+                            <p className="text-neutral-200 mt-1 font-medium">{defect.summary}</p>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded font-bold ${defect.severity === 'HIGH' ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                            {defect.severity} SEVERITY
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 z-10 mt-2">
+                          <span className="text-sm text-neutral-400 w-12">{defect.frequency}</span>
+                          <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: defect.frequency }}></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {!defectTaxonomy?.length && <p className="text-neutral-500 italic">No major defects identified.</p>}
                   </div>
                 </div>
               )}
 
-              {/* Review Feed */}
-              <div className="flex flex-col gap-4">
-                <h4 className="text-sm font-semibold text-neutral-200">Raw Feedback Stream</h4>
-                {reviews.map((rev) => (
-                  <div key={rev.id} className="bg-black/40 border border-white/5 hover:border-white/10 transition-colors rounded-xl p-4 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-2 items-center">
-                        <span className="text-sm bg-neutral-800 px-2 py-0.5 rounded text-neutral-300 font-medium">⭐ {rev.star_rating}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
-                          rev.ai_sentiment === 'positive' ? 'bg-emerald-500/10 text-emerald-400' :
-                          rev.ai_sentiment === 'negative' ? 'bg-rose-500/10 text-rose-400' :
-                          'bg-neutral-500/10 text-neutral-400'
-                        }`}>
-                          {rev.ai_sentiment}
-                        </span>
+              {/* Tab 2: Playbook */}
+              {activeTab === 'playbook' && (
+                <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex flex-col gap-3">
+                    <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Listing Optimizations</h4>
+                    {sellerPlaybook?.listingOptimizations?.map((opt: string, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between bg-indigo-500/5 border border-indigo-500/10 rounded-xl p-4 group hover:bg-indigo-500/10 transition-colors">
+                        <p className="text-neutral-200 text-sm font-medium">{opt}</p>
+                        <button onClick={() => navigator.clipboard.writeText(opt)} className="text-indigo-400 p-2 rounded-lg hover:bg-indigo-500/20 opacity-0 group-hover:opacity-100 transition-all">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        </button>
                       </div>
-                      {rev.ai_extracted_issue !== 'none' && rev.ai_extracted_issue !== 'analysis_error' && (
-                        <span className="text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-1 rounded-md shadow-[0_0_10px_rgba(99,102,241,0.1)]">
-                          Issue: {rev.ai_extracted_issue}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-neutral-300 leading-relaxed italic">
-                      "{rev.review_text}"
-                    </p>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
-          )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Supplier Quality Memo</h4>
+                      <div className="bg-black/40 border border-white/5 rounded-xl p-5 relative group text-sm text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap">
+                        {sellerPlaybook?.supplierQualityMemo}
+                        <button onClick={() => navigator.clipboard.writeText(sellerPlaybook?.supplierQualityMemo || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <h4 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Buyer Response Template</h4>
+                      <div className="bg-black/40 border border-white/5 rounded-xl p-5 relative group text-sm text-neutral-300 leading-relaxed font-mono whitespace-pre-wrap">
+                        {sellerPlaybook?.buyerResponseTemplates}
+                        <button onClick={() => navigator.clipboard.writeText(sellerPlaybook?.buyerResponseTemplates || '')} className="absolute top-2 right-2 text-neutral-500 p-2 rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all bg-black/80">
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: Vernacular */}
+              {activeTab === 'vernacular' && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <h4 className="text-lg font-semibold text-white">Vernacular Intent Decoder</h4>
+                  <div className="grid gap-4">
+                    {vernacularAnalysis?.map((item: any, idx: number) => (
+                      <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Original Raw Text</span>
+                          <p className="text-neutral-300 italic">"{item.originalText}"</p>
+                        </div>
+                        <div className="flex flex-col gap-1 md:border-l md:border-white/10 md:pl-6">
+                          <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Decoded Intent</span>
+                          <p className="text-indigo-300 font-medium">{item.translatedMeaning}</p>
+                        </div>
+                        <div className="flex flex-col gap-1 md:border-l md:border-white/10 md:pl-6">
+                          <span className="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Business Impact</span>
+                          <span className="inline-flex w-fit items-center px-2.5 py-1 rounded-md text-xs font-bold bg-white/5 text-neutral-200 border border-white/10 shadow-sm mt-1">
+                            {item.sentimentIntent}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {!vernacularAnalysis?.length && <p className="text-neutral-500 italic">No vernacular patterns detected.</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Reviews */}
+              {activeTab === 'reviews' && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {['ALL', 'CRITICAL DEFECT', 'NEGATIVE', 'POSITIVE', 'NEUTRAL'].map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => setReviewFilter(filter as any)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                          reviewFilter === filter 
+                          ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' 
+                          : 'bg-black/40 text-neutral-400 border-white/5 hover:bg-white/5'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="grid gap-4">
+                    {filteredReviews.map((rev: any, idx: number) => (
+                      <div key={idx} className="bg-black/40 border border-white/5 hover:border-white/10 transition-colors rounded-xl p-5 flex flex-col gap-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm bg-neutral-800 px-2 py-1 rounded-md text-neutral-200 font-bold border border-white/5 shadow-sm">
+                              ⭐ {rev.rating}
+                            </span>
+                            <span className="text-sm font-semibold text-white">{rev.title}</span>
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded font-bold uppercase tracking-wider ${
+                            rev.badge === 'CRITICAL DEFECT' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                            rev.badge === 'NEGATIVE' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                            rev.badge === 'POSITIVE' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                            'bg-neutral-500/20 text-neutral-400 border border-white/10'
+                          }`}>
+                            {rev.badge || 'NEUTRAL'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-neutral-300 leading-relaxed">
+                          {rev.comment}
+                        </p>
+                      </div>
+                    ))}
+                    {filteredReviews.length === 0 && (
+                      <div className="text-center py-10 text-neutral-500 border border-dashed border-white/10 rounded-xl">
+                        No reviews found for filter: {reviewFilter}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -439,7 +574,7 @@ export default function Dashboard() {
       </main>
 
       {selectedProduct && (
-        <ReviewDetailModal 
+        <ExecutiveIntelligenceConsoleModal 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)} 
         />

@@ -12,6 +12,7 @@ export interface AnalyzedProductSummary {
   averageScore: number;
   riskAssessment: 'safe' | 'warning' | 'critical';
   negativeThemes: string[];
+  intelligence?: any;
 }
 
 export interface AnalyzeUrlsResponse {
@@ -139,6 +140,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         averageScore,
         riskAssessment,
         negativeThemes: Array.from(negativeThemes),
+        intelligence: scrapeResult.intelligence,
       });
     }
 
