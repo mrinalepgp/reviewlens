@@ -124,6 +124,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         useDirectFetch = true;
       }
 
+      let useJinaFallback = false;
+
       if (useDirectFetch) {
         console.log(`[Live Scraper] Executing direct fetch for page ${page}...`);
         try {
@@ -137,20 +139,45 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
           });
           if (!directResponse.ok) {
             if (directResponse.status === 403 || directResponse.status === 503) {
-              throw new Error("Marketplace anti-bot protection triggered. Please retry or update scraping proxies.");
+              console.log("[Live Scraper] Direct fetch hit anti-bot status code.");
+              useJinaFallback = true;
+            } else {
+              if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
+              html = "";
             }
-            if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
-            return "";
-          }
-          html = await directResponse.text();
-          
-          // Also check if Cloudflare challenge page is returned with a 200 OK
-          if (html.includes("cf-browser-verification") || html.includes("cloudflare-nginx") || html.includes("Just a moment...")) {
-            throw new Error("Marketplace anti-bot protection triggered. Please retry or update scraping proxies.");
+          } else {
+            html = await directResponse.text();
+            
+            // Check for Cloudflare/Anti-bot challenge inside 200 OK
+            if (html.includes("cf-browser-verification") || html.includes("cloudflare-nginx") || html.includes("Just a moment...")) {
+              console.log("[Live Scraper] Direct fetch hit anti-bot challenge page.");
+              useJinaFallback = true;
+              html = ""; // Clear html so Jina can run
+            }
           }
         } catch (directErr: any) {
-          if (page === 1) throw directErr;
-          return ""; // Skip on subsequent pages if direct fetch fails
+          console.warn("[Live Scraper] Direct fetch exception:", directErr);
+          useJinaFallback = true;
+        }
+      }
+
+      if (useJinaFallback || !html) {
+        console.log(`[Live Scraper] Executing Jina Reader fallback for page ${page} (Zero-Cost Bypass)...`);
+        try {
+          const jinaUrl = `https://r.jina.ai/${encodeURIComponent(pageUrl)}`;
+          const jinaResponse = await fetch(jinaUrl, {
+            signal: AbortSignal.timeout(15000),
+            headers: { 'Accept': 'text/html' }
+          });
+          if (!jinaResponse.ok) {
+            if (page === 1) throw new Error(`Jina Reader fallback failed: ${jinaResponse.status}`);
+            html = "";
+          } else {
+            html = await jinaResponse.text();
+          }
+        } catch (jinaErr: any) {
+          if (page === 1) throw jinaErr;
+          html = "";
         }
       }
 
@@ -177,6 +204,22 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         $('*').each((_, el) => {
           if ($(el).children().length === 0) {
             const text = $(el).text().trim();
+            if (text.length > 40 && text.length < 1500 && !text.includes('{') && !text.includes('}')) {
+              rawReviews.push(text);
+            }
+          }
+        });
+      }
+
+      // If strict extraction yielded nothing (e.g. Jina stripped the classes), try a broad generic text extraction
+      if (rawReviews.length === 0 && html.length > 100) {
+        console.log(`[Live Scraper] Strict selectors failed on page ${page}. Engaging generic structural extraction...`);
+        productTitle = productTitle || $('h1').text().trim() || $('title').text().trim();
+        $('script, style, svg, nav, footer, header').remove();
+        $('*').each((_, el) => {
+          if ($(el).children().length === 0) {
+            const text = $(el).text().trim();
+            // Looks like a review paragraph
             if (text.length > 40 && text.length < 1500 && !text.includes('{') && !text.includes('}')) {
               rawReviews.push(text);
             }
