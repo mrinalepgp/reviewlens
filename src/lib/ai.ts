@@ -91,3 +91,103 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
     };
   }
 }
+
+export interface HeadToHeadMatrix {
+  clashScorecard: {
+    ourRisk: number;
+    theirRisk: number;
+    ourHealth: number;
+    theirHealth: number;
+    ourRating: number;
+    theirRating: number;
+  };
+  whereYouWin: string[];
+  whereTheyWin: string[];
+  marketStealStrategy: string[];
+}
+
+export async function generateHeadToHeadComparison(baseIntelligence: any, rivalIntelligence: any): Promise<HeadToHeadMatrix> {
+  console.log(`[AI] Generating Head-to-Head Comparison Matrix...`);
+
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is missing from environment variables");
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+  const schema: Schema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      clashScorecard: {
+        type: SchemaType.OBJECT,
+        properties: {
+          ourRisk: { type: SchemaType.NUMBER },
+          theirRisk: { type: SchemaType.NUMBER },
+          ourHealth: { type: SchemaType.NUMBER },
+          theirHealth: { type: SchemaType.NUMBER },
+          ourRating: { type: SchemaType.NUMBER },
+          theirRating: { type: SchemaType.NUMBER }
+        },
+        required: ["ourRisk", "theirRisk", "ourHealth", "theirHealth", "ourRating", "theirRating"]
+      },
+      whereYouWin: {
+        type: SchemaType.ARRAY,
+        items: { type: SchemaType.STRING },
+        description: "Specific product/packaging advantages we have over the competitor."
+      },
+      whereTheyWin: {
+        type: SchemaType.ARRAY,
+        items: { type: SchemaType.STRING },
+        description: "What customers praise about the rival (our vulnerabilities)."
+      },
+      marketStealStrategy: {
+        type: SchemaType.ARRAY,
+        items: { type: SchemaType.STRING },
+        description: "Direct actionable tactics to outrank them based on the gaps."
+      }
+    },
+    required: ["clashScorecard", "whereYouWin", "whereTheyWin", "marketStealStrategy"]
+  };
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    systemInstruction: "You are an expert e-commerce competitive intelligence AI. Analyze the two product intelligence payloads and output a direct, actionable Head-to-Head Matrix.",
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: schema,
+      temperature: 0.2,
+    },
+  });
+
+  const prompt = `
+Base Product Intelligence:
+${JSON.stringify(baseIntelligence, null, 2)}
+
+Competitor Product Intelligence:
+${JSON.stringify(rivalIntelligence, null, 2)}
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const outputContent = result.response.text();
+    if (!outputContent) throw new Error('Empty response');
+    
+    return JSON.parse(outputContent) as HeadToHeadMatrix;
+  } catch (error) {
+    console.error('[AI] Failed to generate head-to-head matrix:', error);
+    // Fallback stub
+    return {
+      clashScorecard: {
+        ourRisk: baseIntelligence?.productSummary?.returnRiskScore || 0,
+        theirRisk: rivalIntelligence?.productSummary?.returnRiskScore || 0,
+        ourHealth: baseIntelligence?.productSummary?.listingHealthScore || 0,
+        theirHealth: rivalIntelligence?.productSummary?.listingHealthScore || 0,
+        ourRating: 0,
+        theirRating: 0
+      },
+      whereYouWin: ["Analysis failed to generate advantages."],
+      whereTheyWin: ["Analysis failed to generate vulnerabilities."],
+      marketStealStrategy: ["Please try running the comparison again."]
+    };
+  }
+}

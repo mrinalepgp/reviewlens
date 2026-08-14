@@ -19,6 +19,7 @@ export interface EnterpriseIntelligence {
   vernacularAnalysis?: any[];
   sellerPlaybook?: any;
   reviews?: any[];
+  suggestedCompetitors?: any[];
 }
 
 export interface ScrapingResult {
@@ -226,6 +227,15 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
                 "comment": "Review body",
                 "badge": "CRITICAL DEFECT",
                 "badgeColor": "red"
+              }
+            ],
+            "suggestedCompetitors": [
+              {
+                "title": "Fastrack Polarized Aviator Sunglasses",
+                "url": "https://www.flipkart.com/...",
+                "rating": 4.2,
+                "price": "₹899",
+                "reason": "Top Category Best-Seller"
               }
             ]
           }

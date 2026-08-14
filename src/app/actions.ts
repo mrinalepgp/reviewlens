@@ -1,7 +1,7 @@
 "use server";
 
 import { fetchMarketplaceReviews } from "@/lib/scraper";
-import { analyzeReviewSentiment } from "@/lib/ai";
+import { analyzeReviewSentiment, generateHeadToHeadComparison } from "@/lib/ai";
 import { createClient } from "@/utils/supabase/server";
 
 export interface AnalyzedProductSummary {
@@ -190,6 +190,33 @@ export async function fetchProductReviewsAction(productId: string) {
       success: false,
       reviews: [],
       error: error instanceof Error ? error.message : 'Unknown error.'
+    };
+  }
+}
+
+export async function compareCompetitorAction(baseIntelligence: any, competitorUrl: string) {
+  try {
+    console.log(`[Action] Initiating competitor comparison against: ${competitorUrl}`);
+    
+    // 1. Scrape competitor live page
+    const scrapeResult = await fetchMarketplaceReviews(competitorUrl);
+    if (!scrapeResult.success || !scrapeResult.intelligence) {
+      throw new Error(`Failed to extract competitor intelligence: ${scrapeResult.error}`);
+    }
+    
+    // 2. Generate AI Head-to-Head Matrix
+    const matrix = await generateHeadToHeadComparison(baseIntelligence, scrapeResult.intelligence);
+    
+    return {
+      success: true,
+      matrix,
+      competitorIntelligence: scrapeResult.intelligence
+    };
+  } catch (error) {
+    console.error("[Action] Competitor comparison failed:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error during comparison'
     };
   }
 }

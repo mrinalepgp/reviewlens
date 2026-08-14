@@ -3,7 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow } from '@/app/actions';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 // --- Types ---
@@ -221,8 +221,13 @@ function ExecutiveIntelligenceConsoleModal({
   product: AnalyzedProductSummary;
   onClose: () => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews'>('diagnostics');
+  const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors'>('diagnostics');
   const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'NEGATIVE' | 'POSITIVE'>('ALL');
+  
+  // Competitor Radar State
+  const [customCompetitorUrl, setCustomCompetitorUrl] = useState('');
+  const [isComparing, setIsComparing] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<any>(null);
   
   // Calculator State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
@@ -393,7 +398,8 @@ function ExecutiveIntelligenceConsoleModal({
                 { id: 'diagnostics', label: 'Root-Cause' },
                 { id: 'playbook', label: 'Mitigation Playbook' },
                 { id: 'vernacular', label: 'Vernacular Decoder' },
-                { id: 'reviews', label: 'Review Stream' }
+                { id: 'reviews', label: 'Review Stream' },
+                { id: 'competitors', label: 'Competitor Radar' }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -555,6 +561,155 @@ function ExecutiveIntelligenceConsoleModal({
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Tab 5: Competitors */}
+              {activeTab === 'competitors' && (
+                <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {comparisonResult ? (
+                    <div className="flex flex-col gap-6">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xl font-bold text-white">Head-to-Head Matrix</h4>
+                        <button onClick={() => setComparisonResult(null)} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors text-sm font-medium">Back to Radar</button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Clash Scorecard */}
+                        <div className="bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col gap-4">
+                          <h5 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-2">Clash Scorecard</h5>
+                          <div className="flex justify-between items-center">
+                            <span className="text-neutral-300">Return Risk</span>
+                            <div className="flex gap-4 font-mono">
+                              <span className={comparisonResult.clashScorecard.ourRisk < comparisonResult.clashScorecard.theirRisk ? "text-emerald-400 font-bold" : "text-rose-400"}>{comparisonResult.clashScorecard.ourRisk}</span>
+                              <span className="text-neutral-600">vs</span>
+                              <span className={comparisonResult.clashScorecard.theirRisk < comparisonResult.clashScorecard.ourRisk ? "text-emerald-400 font-bold" : "text-neutral-400"}>{comparisonResult.clashScorecard.theirRisk}</span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-neutral-300">Listing Health</span>
+                            <div className="flex gap-4 font-mono">
+                              <span className={comparisonResult.clashScorecard.ourHealth > comparisonResult.clashScorecard.theirHealth ? "text-emerald-400 font-bold" : "text-rose-400"}>{comparisonResult.clashScorecard.ourHealth}</span>
+                              <span className="text-neutral-600">vs</span>
+                              <span className={comparisonResult.clashScorecard.theirHealth > comparisonResult.clashScorecard.ourHealth ? "text-emerald-400 font-bold" : "text-neutral-400"}>{comparisonResult.clashScorecard.theirHealth}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Where You Win */}
+                        <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl p-6 flex flex-col gap-3">
+                          <h5 className="text-sm font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            Where You Win
+                          </h5>
+                          <ul className="flex flex-col gap-2">
+                            {comparisonResult.whereYouWin.map((point: string, idx: number) => (
+                              <li key={idx} className="text-sm text-neutral-200 leading-relaxed">• {point}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Where They Win */}
+                        <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-6 flex flex-col gap-3">
+                          <h5 className="text-sm font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            Vulnerabilities
+                          </h5>
+                          <ul className="flex flex-col gap-2">
+                            {comparisonResult.whereTheyWin.map((point: string, idx: number) => (
+                              <li key={idx} className="text-sm text-neutral-200 leading-relaxed">• {point}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* Market Steal Strategy */}
+                      <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-6">
+                        <h5 className="text-sm font-semibold text-indigo-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                          Market-Steal Strategy
+                        </h5>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {comparisonResult.marketStealStrategy.map((tactic: string, idx: number) => (
+                            <div key={idx} className="bg-black/40 rounded-lg p-4 text-sm text-neutral-200 border border-white/5">
+                              {tactic}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : isComparing ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                      <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-neutral-400 font-medium">Scraping competitor data and generating AI clash matrix...</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2">
+                        <h4 className="text-lg font-semibold text-white">Auto-Discovered Rivals</h4>
+                        <p className="text-sm text-neutral-400">Top organic competitors in this price band extracted via AI.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {intelligence?.suggestedCompetitors?.map((comp: any, idx: number) => (
+                          <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 flex flex-col justify-between gap-4 hover:border-white/20 transition-all group">
+                            <div>
+                              <div className="flex justify-between items-start mb-2">
+                                <span className="text-xs font-bold bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded border border-indigo-500/20">{comp.reason}</span>
+                                <span className="text-sm font-semibold bg-white/5 px-2 py-1 rounded text-white">{comp.price}</span>
+                              </div>
+                              <h5 className="font-medium text-neutral-200 line-clamp-2">{comp.title}</h5>
+                              <p className="text-sm text-neutral-500 mt-2">Rating: ⭐ {comp.rating}</p>
+                            </div>
+                            <button 
+                              onClick={async () => {
+                                setIsComparing(true);
+                                const res = await compareCompetitorAction(intelligence, comp.url);
+                                if (res.success) setComparisonResult(res.matrix);
+                                setIsComparing(false);
+                              }}
+                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                            >
+                              <span>⚔️</span> Analyze Against This Rival
+                            </button>
+                          </div>
+                        ))}
+                        {(!intelligence?.suggestedCompetitors || intelligence.suggestedCompetitors.length === 0) && (
+                          <div className="col-span-full py-10 text-center border border-dashed border-white/10 rounded-xl text-neutral-500">
+                            No auto-discovered competitors found for this product.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-8 pt-8 border-t border-white/10">
+                        <h4 className="text-sm font-semibold text-white mb-4">Or paste a specific competitor URL</h4>
+                        <div className="flex gap-3">
+                          <input 
+                            type="text" 
+                            placeholder="https://flipkart.com/..." 
+                            value={customCompetitorUrl}
+                            onChange={(e) => setCustomCompetitorUrl(e.target.value)}
+                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <button 
+                            disabled={!customCompetitorUrl}
+                            onClick={async () => {
+                              setIsComparing(true);
+                              const res = await compareCompetitorAction(intelligence, customCompetitorUrl);
+                              if (res.success) setComparisonResult(res.matrix);
+                              setIsComparing(false);
+                            }}
+                            className="px-6 py-2 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            Compare Custom SKU
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
