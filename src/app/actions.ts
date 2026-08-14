@@ -49,11 +49,28 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       const scrapeResult = await fetchMarketplaceReviews(url);
 
       if (!scrapeResult.success) {
-        throw new Error(`Scraping failed for ${url}: ${scrapeResult.error}`);
+        console.error(`[Action] Scraping failed for ${url}: ${scrapeResult.error}`);
+        summaries.push({
+          url,
+          platform: scrapeResult.marketplace || 'unknown',
+          title: `Analysis Failed: ${scrapeResult.error}`,
+          averageScore: 0,
+          riskAssessment: 'safe',
+          negativeThemes: ['Pipeline Error'],
+        });
+        continue;
       }
 
       if (!scrapeResult.reviews || !scrapeResult.reviews.length) {
         console.warn(`[Action] No reviews collected for URL: ${url}`);
+        summaries.push({
+          url,
+          platform: scrapeResult.marketplace || 'unknown',
+          title: `Incomplete Data: No Reviews Found`,
+          averageScore: 0,
+          riskAssessment: 'safe',
+          negativeThemes: ['Insufficient Data'],
+        });
         continue;
       }
 

@@ -157,11 +157,16 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       const $ = cheerio.load(html);
 
       let productTitle = "";
+      let productRating = "";
+      let productPrice = "";
       let rawReviews: string[] = [];
 
       if (marketplace === 'flipkart') {
         productTitle = $('span.VU-ZEz, span.B_NuCI').text().trim() || $('title').text().trim();
-        $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX').each((_, el) => {
+        productRating = $('div.XJA2L8, div._3LWZlK').first().text().trim();
+        productPrice = $('div.Nx9bqj, div._30jeq3').first().text().trim();
+        
+        $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq').each((_, el) => {
            const text = $(el).text().replace(/\s+/g, ' ').trim();
            if (text.length > 10) rawReviews.push(text);
         });
@@ -179,7 +184,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         });
       }
       
-      return { title: productTitle, reviews: rawReviews };
+      return { title: productTitle, rating: productRating, price: productPrice, reviews: rawReviews };
     };
     
     const pagePromises = [];
@@ -188,10 +193,16 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     }
     
     let combinedTitle = "";
+    let combinedRating = "";
+    let combinedPrice = "";
     let combinedReviews: string[] = [];
     try {
       const pageResults = await Promise.all(pagePromises);
-      if (pageResults[0]) combinedTitle = pageResults[0].title;
+      if (pageResults[0]) {
+        combinedTitle = pageResults[0].title;
+        combinedRating = pageResults[0].rating;
+        combinedPrice = pageResults[0].price;
+      }
       pageResults.forEach(r => {
         if (r && r.reviews) {
           combinedReviews.push(...r.reviews);
@@ -207,9 +218,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     console.log(`[Live Scraper] Extracted ${combinedReviews.length} potential reviews. Minimizing payload...`);
     
     const uniqueReviews = Array.from(new Set(combinedReviews));
-    const sampledReviews = uniqueReviews.slice(0, 20);
+    const sampledReviews = uniqueReviews.slice(0, 25);
     
-    const compactPayload = `Product: ${combinedTitle} | Category: ${marketplace} | Reviews: ${sampledReviews.join("\\n---\\n")}`;
+    const compactPayload = `Product: ${combinedTitle} | Category: ${marketplace} | Price: ${combinedPrice} | Rating: ${combinedRating} | Reviews: ${sampledReviews.join("\\n---\\n")}`;
 
     // Let Gemini analyze the compact payload
     const geminiKey = process.env.GEMINI_API_KEY;
