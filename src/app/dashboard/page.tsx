@@ -1,5 +1,7 @@
 "use client";
 
+export const maxDuration = 120;
+
 import React, { useState, useEffect } from 'react';
 import { analyzeUrlsAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow } from '@/app/actions';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -362,7 +364,7 @@ export default function Dashboard() {
       const response = await Promise.race([
         analyzeUrlsAction(urls),
         new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error("TIMEOUT_45S")), 45000)
+          setTimeout(() => reject(new Error("TIMEOUT_90S")), 90000)
         )
       ]);
       
@@ -375,7 +377,7 @@ export default function Dashboard() {
       }
     } catch (err: any) {
       console.error(err);
-      if (err.message === "TIMEOUT_45S" || err.message?.includes("504") || err.message?.includes("timeout")) {
+      if (err.message === "TIMEOUT_90S" || err.message?.includes("504") || err.message?.includes("timeout")) {
         setError("The request took too long to complete. Please try analyzing a direct product page link or re-submit.");
       } else {
         setError("A fatal error occurred during pipeline execution. " + (err.message || ''));

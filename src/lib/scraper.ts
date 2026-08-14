@@ -70,13 +70,10 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     }
     const provider = process.env.PROXY_PROVIDER || (proxyKey ? 'zenrows' : 'scrapingdog');
 
-    let combinedRawText = "";
-    
     // Fetch up to 2 pages for multi-page extraction (Flipkart primarily)
     const maxPages = marketplace === 'flipkart' ? 2 : 1;
-    let useDirectFetch = false;
     
-    for (let page = 1; page <= maxPages; page++) {
+    const fetchPage = async (page: number) => {
       let pageUrl = url;
       if (marketplace === 'flipkart') {
         const pUrlObj = new URL(url);
@@ -86,52 +83,60 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
       console.log(`[Live Scraper] Fetching page ${page} for ${pageUrl}`);
       let html = "";
+      let useDirectFetch = false;
 
-      if (!useDirectFetch) {
-        // Universal Proxy Handler
-        let proxyUrl = "";
-        if (provider === 'scraperapi') {
-          proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(pageUrl)}&render=true`;
-        } else if (provider === 'zenrows') {
-          proxyUrl = `https://api.zenrows.com/v1/?apikey=${proxyKey}&url=${encodeURIComponent(pageUrl)}&js_render=true`;
-        } else {
-          proxyUrl = `https://api.scrapingdog.com/scrape?api_key=${dogKey || proxyKey}&url=${encodeURIComponent(pageUrl)}&dynamic=true`;
-        }
-        
+      // Universal Proxy Handler
+      let proxyUrl = "";
+      if (provider === 'scraperapi') {
+        proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(pageUrl)}&premium=true`;
+      } else if (provider === 'zenrows') {
+        proxyUrl = `https://api.zenrows.com/v1/?apikey=${proxyKey}&url=${encodeURIComponent(pageUrl)}&premium_proxy=true&wait=0`;
+      } else {
+        proxyUrl = `https://api.scrapingdog.com/scrape?api_key=${dogKey || proxyKey}&url=${encodeURIComponent(pageUrl)}&dynamic=false`;
+      }
+      
+      try {
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
-        
         if (!response.ok) {
           const errorBody = await response.text();
           console.warn(`[Live Scraper] Enterprise proxy error for page ${page}: ${response.status} - ${errorBody}`);
-          console.log("[Live Scraper] Primary proxy returned error/quota limit. Falling back to native direct fetch...");
+          console.log(`[Live Scraper] Primary proxy returned error/quota limit for page ${page}. Falling back to native direct fetch...`);
           useDirectFetch = true;
         } else {
           html = await response.text();
         }
+      } catch (err) {
+        console.warn(`[Live Scraper] Proxy request failed for page ${page}:`, err);
+        useDirectFetch = true;
       }
 
       if (useDirectFetch) {
         console.log(`[Live Scraper] Executing direct fetch for page ${page}...`);
-        const directResponse = await fetch(pageUrl, {
-          signal: AbortSignal.timeout(12000),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
+        try {
+          const directResponse = await fetch(pageUrl, {
+            signal: AbortSignal.timeout(12000),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.9',
+            }
+          });
+          if (!directResponse.ok) {
+            if (directResponse.status === 403 || directResponse.status === 503) {
+              throw new Error("Marketplace anti-bot protection triggered. Please retry or update scraping proxies.");
+            }
+            if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
+            return "";
           }
-        });
-        if (!directResponse.ok) {
-          if (directResponse.status === 403 || directResponse.status === 503) {
-            return { success: false, marketplace, url, reviews: [], error: "Marketplace anti-bot protection triggered. Please retry or update scraping proxies." };
+          html = await directResponse.text();
+          
+          // Also check if Cloudflare challenge page is returned with a 200 OK
+          if (html.includes("cf-browser-verification") || html.includes("cloudflare-nginx") || html.includes("Just a moment...")) {
+            throw new Error("Marketplace anti-bot protection triggered. Please retry or update scraping proxies.");
           }
-          if (page === 1) throw new Error(`Direct fetch failed on page 1: ${directResponse.status}`);
-          break;
-        }
-        html = await directResponse.text();
-        
-        // Also check if Cloudflare challenge page is returned with a 200 OK
-        if (html.includes("cf-browser-verification") || html.includes("cloudflare-nginx") || html.includes("Just a moment...")) {
-          return { success: false, marketplace, url, reviews: [], error: "Marketplace anti-bot protection triggered. Please retry or update scraping proxies." };
+        } catch (directErr: any) {
+          if (page === 1) throw directErr;
+          return ""; // Skip on subsequent pages if direct fetch fails
         }
       }
 
@@ -141,7 +146,23 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       $('script, style, nav, footer, header').remove();
       const pageText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 4000);
       
-      combinedRawText += `\n--- PAGE ${page} ---\n` + pageText;
+      return `\n--- PAGE ${page} ---\n` + pageText;
+    };
+    
+    const pagePromises = [];
+    for (let page = 1; page <= maxPages; page++) {
+      pagePromises.push(fetchPage(page));
+    }
+    
+    let combinedRawText = "";
+    try {
+      const pageResults = await Promise.all(pagePromises);
+      combinedRawText = pageResults.join('');
+    } catch (err: any) {
+      if (err.message && err.message.includes("anti-bot protection")) {
+        return { success: false, marketplace, url, reviews: [], error: err.message };
+      }
+      throw err;
     }
 
     console.log(`[Live Scraper] Page content text optimized. Sending structural mapping request to AI engine...`);
