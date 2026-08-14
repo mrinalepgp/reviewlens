@@ -38,6 +38,7 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
     const urlObj = new URL(url);
     if (marketplace === 'flipkart') {
       const pid = urlObj.searchParams.get('pid');
+      // Strip out volatile tracking query strings (otracker, fm, iid, ppt)
       urlObj.search = '';
       if (pid) urlObj.searchParams.set('pid', pid);
       
@@ -154,8 +155,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
       const $ = cheerio.load(html);
 
-      // Strip script tags and styles to extract pure visible text layout strings
-      $('script, style, nav, footer, header').remove();
+      // Strip script tags, styles, svgs, and structural elements to reduce context bloat by ~70%
+      $('script, style, svg, nav, footer, header').remove();
       const pageText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 4000);
       
       return `\n--- PAGE ${page} ---\n` + pageText;
@@ -283,9 +284,12 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         if (aiRes.status === 429 || aiRes.status === 503) {
           console.warn(`[Live Scraper] Gemini API returned ${aiRes.status} on attempt ${attempt + 1}: ${lastErrorText}`);
           if (attempt === maxRetries) {
-            return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Automatically retrying...' };
+            return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Please try again in a few moments.' };
           }
-          const delay = Math.pow(2, attempt) * 1000;
+          // Exponential backoff with jitter (1.5s -> 3s)
+          const baseDelay = attempt === 0 ? 1500 : 3000;
+          const jitter = Math.floor(Math.random() * 500);
+          const delay = baseDelay + jitter;
           console.log(`[Live Scraper] Retrying in ${delay}ms...`);
           await new Promise(res => setTimeout(res, delay));
           attempt++;
