@@ -156,22 +156,28 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
       const $ = cheerio.load(html);
 
-      const title = $('title').text().trim();
-      const h1 = $('h1').text().trim();
-      const productTitle = h1 || title;
+      let productTitle = "";
+      let rawReviews: string[] = [];
 
-      // Strip script tags, styles, svgs, and structural elements
-      $('script, style, svg, nav, footer, header').remove();
-      
-      const rawReviews: string[] = [];
-      $('*').each((_, el) => {
-        if ($(el).children().length === 0) {
-          const text = $(el).text().trim();
-          if (text.length > 40 && text.length < 1500 && !text.includes('{') && !text.includes('}')) {
-            rawReviews.push(text);
+      if (marketplace === 'flipkart') {
+        productTitle = $('span.VU-ZEz, span.B_NuCI').text().trim() || $('title').text().trim();
+        $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX').each((_, el) => {
+           const text = $(el).text().replace(/\s+/g, ' ').trim();
+           if (text.length > 10) rawReviews.push(text);
+        });
+      } else {
+        productTitle = $('h1').text().trim() || $('title').text().trim();
+        // Strip script tags, styles, svgs, and structural elements for generic extraction
+        $('script, style, svg, nav, footer, header').remove();
+        $('*').each((_, el) => {
+          if ($(el).children().length === 0) {
+            const text = $(el).text().trim();
+            if (text.length > 40 && text.length < 1500 && !text.includes('{') && !text.includes('}')) {
+              rawReviews.push(text);
+            }
           }
-        }
-      });
+        });
+      }
       
       return { title: productTitle, reviews: rawReviews };
     };
@@ -201,13 +207,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     console.log(`[Live Scraper] Extracted ${combinedReviews.length} potential reviews. Minimizing payload...`);
     
     const uniqueReviews = Array.from(new Set(combinedReviews));
-    const sampledReviews = uniqueReviews.slice(0, 25);
+    const sampledReviews = uniqueReviews.slice(0, 20);
     
-    const compactPayload = JSON.stringify({
-      productTitle: combinedTitle,
-      category: marketplace,
-      reviews: sampledReviews
-    });
+    const compactPayload = `Product: ${combinedTitle} | Category: ${marketplace} | Reviews: ${sampledReviews.join("\\n---\\n")}`;
 
     // Let Gemini analyze the compact payload
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -216,7 +218,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const aiPrompt = {
       contents: [{
         parts: [{
-          text: `You are an expert data extraction engine and e-commerce seller intelligence analyst. Analyze this compact JSON payload representing product reviews and metadata for a ${marketplace} product. Extract and analyze as many real user product reviews as you can find in the payload.
+          text: `You are an expert data extraction engine and e-commerce seller intelligence analyst. Analyze this product data and its reviews.
           
           Strict Tagging Rule: Never tag negative reviews (1-2 stars or defect mentions) as 'NEUTRAL'. Strictly enforce "CRITICAL DEFECT" or "NEGATIVE" for the badge.
           
@@ -288,7 +290,6 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
             ]
           }
           
-          Compact JSON Payload:
           ${compactPayload}
           `
         }]
@@ -316,8 +317,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (!aiRes.ok) {
         const errText = await aiRes.text();
         if (aiRes.status === 429 || aiRes.status === 503 || errText.includes('503') || errText.includes('429')) {
-          console.warn(`[Live Scraper] Gemini rate limit/busy (503/429) on attempt ${attempt + 1}. Pausing for 2s...`);
-          await new Promise(res => setTimeout(res, 2000));
+          console.warn(`[Live Scraper] Gemini rate limit/busy (503/429) on attempt ${attempt + 1}. Pausing for 1.5s...`);
+          await new Promise(res => setTimeout(res, 1500));
           attempt++;
           continue;
         }
@@ -325,7 +326,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         if (attempt === maxRetries) {
           return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Please try again in a few moments.' };
         }
-        await new Promise(res => setTimeout(res, 2000));
+        await new Promise(res => setTimeout(res, 1500));
         attempt++;
         continue;
       }
