@@ -38,7 +38,7 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
     if (marketplace === 'flipkart') {
       const pid = urlObj.searchParams.get('pid');
       const lid = urlObj.searchParams.get('lid');
-      // Strip out volatile tracking query strings (otracker, fm, iid, ppt)
+      // Keep only the base domain, product path, and pid parameter. Strip out otracker, fm, iid, ppt, ppn, ov_redirect.
       urlObj.search = '';
       if (pid) urlObj.searchParams.set('pid', pid);
       if (lid) urlObj.searchParams.set('lid', lid);
@@ -184,7 +184,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
     // Let Gemini locate and cleanly separate the reviews from the raw text layout
     const geminiKey = process.env.GEMINI_API_KEY;
-    const aiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+    const aiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
 
     const aiPrompt = {
       contents: [{

@@ -33,6 +33,18 @@ const responseSchema: Schema = {
   required: ["sentiment", "detected_issue"],
 };
 
+async function generateContentSafe(model: any, prompt: string, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await model.generateContent(prompt);
+    } catch (err: any) {
+      if (i === retries - 1) throw err;
+      console.warn(`[AI] Gemini busy, retrying attempt ${i + 2}...`);
+      await new Promise((res) => setTimeout(res, 2000 * (i + 1)));
+    }
+  }
+}
+
 /**
  * Analyzes a given platform review using Gemini to extract
  * sentiment and specific detected issues, particularly focused on Indian vernaculars.
@@ -51,7 +63,7 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
@@ -60,7 +72,7 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
       },
     });
 
-    const result = await model.generateContent(`Review: "${reviewText}"`);
+    const result = await generateContentSafe(model, `Review: "${reviewText}"`);
     const outputContent = result.response.text();
 
     if (!outputContent) {
@@ -150,7 +162,7 @@ export async function generateHeadToHeadComparison(baseIntelligence: any, rivalI
   };
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-1.5-flash",
     systemInstruction: "You are an expert e-commerce competitive intelligence AI. Analyze the two product intelligence payloads and output a direct, actionable Head-to-Head Matrix.",
     generationConfig: {
       responseMimeType: "application/json",
@@ -168,7 +180,7 @@ ${JSON.stringify(rivalIntelligence, null, 2)}
   `;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateContentSafe(model, prompt);
     const outputContent = result.response.text();
     if (!outputContent) throw new Error('Empty response');
     
