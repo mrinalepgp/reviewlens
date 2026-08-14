@@ -39,8 +39,13 @@ async function generateContentSafe(model: any, prompt: string, retries = 3) {
       return await model.generateContent(prompt);
     } catch (err: any) {
       if (i === retries - 1) throw err;
-      console.warn(`[AI] Gemini busy, retrying attempt ${i + 2}...`);
-      await new Promise((res) => setTimeout(res, 2000 * (i + 1)));
+      const status = err?.status || err?.response?.status;
+      if (status === 429 || status === 503 || err.message.includes('503') || err.message.includes('429')) {
+        console.warn(`[AI] Gemini rate limit/busy (503/429), pausing 2s before attempt ${i + 2}...`);
+        await new Promise((res) => setTimeout(res, 2000));
+      } else {
+        throw err;
+      }
     }
   }
 }
@@ -68,7 +73,9 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        temperature: 0.1,
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 2048,
       },
     });
 
@@ -168,6 +175,8 @@ export async function generateHeadToHeadComparison(baseIntelligence: any, rivalI
       responseMimeType: "application/json",
       responseSchema: schema,
       temperature: 0.2,
+      topP: 0.8,
+      maxOutputTokens: 2048,
     },
   });
 

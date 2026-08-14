@@ -156,11 +156,24 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
       const $ = cheerio.load(html);
 
-      // Strip script tags, styles, svgs, and structural elements to reduce context bloat by ~70%
+      const title = $('title').text().trim();
+      const h1 = $('h1').text().trim();
+      const productTitle = h1 || title;
+
+      // Strip script tags, styles, svgs, and structural elements
       $('script, style, svg, nav, footer, header').remove();
-      const pageText = $('body').text().replace(/\s+/g, ' ').trim().slice(0, 4000);
       
-      return `\n--- PAGE ${page} ---\n` + pageText;
+      const rawReviews: string[] = [];
+      $('*').each((_, el) => {
+        if ($(el).children().length === 0) {
+          const text = $(el).text().trim();
+          if (text.length > 40 && text.length < 1500 && !text.includes('{') && !text.includes('}')) {
+            rawReviews.push(text);
+          }
+        }
+      });
+      
+      return { title: productTitle, reviews: rawReviews };
     };
     
     const pagePromises = [];
@@ -168,10 +181,16 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       pagePromises.push(fetchPage(page));
     }
     
-    let combinedRawText = "";
+    let combinedTitle = "";
+    let combinedReviews: string[] = [];
     try {
       const pageResults = await Promise.all(pagePromises);
-      combinedRawText = pageResults.join('');
+      if (pageResults[0]) combinedTitle = pageResults[0].title;
+      pageResults.forEach(r => {
+        if (r && r.reviews) {
+          combinedReviews.push(...r.reviews);
+        }
+      });
     } catch (err: any) {
       if (err.message && err.message.includes("anti-bot protection")) {
         return { success: false, marketplace, url, reviews: [], error: err.message };
@@ -179,17 +198,25 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       throw err;
     }
 
-    console.log(`[Live Scraper] Page content text optimized. Sending structural mapping request to AI engine...`);
-    const cleanPageText = combinedRawText.slice(0, 12000);
+    console.log(`[Live Scraper] Extracted ${combinedReviews.length} potential reviews. Minimizing payload...`);
+    
+    const uniqueReviews = Array.from(new Set(combinedReviews));
+    const sampledReviews = uniqueReviews.slice(0, 25);
+    
+    const compactPayload = JSON.stringify({
+      productTitle: combinedTitle,
+      category: marketplace,
+      reviews: sampledReviews
+    });
 
-    // Let Gemini locate and cleanly separate the reviews from the raw text layout
+    // Let Gemini analyze the compact payload
     const geminiKey = process.env.GEMINI_API_KEY;
     const aiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
 
     const aiPrompt = {
       contents: [{
         parts: [{
-          text: `You are an expert data extraction engine and e-commerce seller intelligence analyst. Analyze this raw text from a ${marketplace} product page (or multiple pages) and extract as many real user product reviews as you can find (aim for 30-50). Ignore UI buttons, category lists, ads, and system links.
+          text: `You are an expert data extraction engine and e-commerce seller intelligence analyst. Analyze this compact JSON payload representing product reviews and metadata for a ${marketplace} product. Extract and analyze as many real user product reviews as you can find in the payload.
           
           Strict Tagging Rule: Never tag negative reviews (1-2 stars or defect mentions) as 'NEUTRAL'. Strictly enforce "CRITICAL DEFECT" or "NEGATIVE" for the badge.
           
@@ -261,11 +288,17 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
             ]
           }
           
-          Raw Page Text:
-          ${cleanPageText}`
+          Compact JSON Payload:
+          ${compactPayload}
+          `
         }]
       }],
-      generationConfig: { responseMimeType: "application/json" }
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.8,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json"
+      }
     };
 
     const maxRetries = 3;
@@ -281,24 +314,20 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       });
       
       if (!aiRes.ok) {
-        lastErrorText = await aiRes.text();
-        if (aiRes.status === 429 || aiRes.status === 503) {
-          console.warn(`[Live Scraper] Gemini API returned ${aiRes.status} on attempt ${attempt + 1}: ${lastErrorText}`);
-          if (attempt === maxRetries) {
-            return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Please try again in a few moments.' };
-          }
-          // Enterprise backoff handler: 1.5s, 3s, 5s delay sequence
-          const delaySequence = [1500, 3000, 5000];
-          const baseDelay = delaySequence[attempt] || 5000;
-          const jitter = Math.floor(Math.random() * 500);
-          const delay = baseDelay + jitter;
-          console.log(`[Live Scraper] Retrying in ${delay}ms...`);
-          await new Promise(res => setTimeout(res, delay));
+        const errText = await aiRes.text();
+        if (aiRes.status === 429 || aiRes.status === 503 || errText.includes('503') || errText.includes('429')) {
+          console.warn(`[Live Scraper] Gemini rate limit/busy (503/429) on attempt ${attempt + 1}. Pausing for 2s...`);
+          await new Promise(res => setTimeout(res, 2000));
           attempt++;
           continue;
-        } else {
-          throw new Error(`AI Extraction failed: ${aiRes.status} ${lastErrorText}`);
         }
+        console.error(`[Live Scraper] AI Engine Error: ${aiRes.status} - ${errText}`);
+        if (attempt === maxRetries) {
+          return { success: false, marketplace, url, reviews: [], error: 'AI model service is under high demand. Please try again in a few moments.' };
+        }
+        await new Promise(res => setTimeout(res, 2000));
+        attempt++;
+        continue;
       }
       break; // Success
     }
