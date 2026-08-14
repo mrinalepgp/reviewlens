@@ -63,7 +63,7 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.5-flash",
       systemInstruction: SYSTEM_PROMPT,
       generationConfig: {
         responseMimeType: "application/json",
@@ -162,7 +162,7 @@ export async function generateHeadToHeadComparison(baseIntelligence: any, rivalI
   };
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.5-flash",
     systemInstruction: "You are an expert e-commerce competitive intelligence AI. Analyze the two product intelligence payloads and output a direct, actionable Head-to-Head Matrix.",
     generationConfig: {
       responseMimeType: "application/json",

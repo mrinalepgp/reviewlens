@@ -184,7 +184,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
     // Let Gemini locate and cleanly separate the reviews from the raw text layout
     const geminiKey = process.env.GEMINI_API_KEY;
-    const aiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+    const aiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
 
     const aiPrompt = {
       contents: [{
