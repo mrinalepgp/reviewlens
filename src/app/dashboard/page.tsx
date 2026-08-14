@@ -224,6 +224,11 @@ function ExecutiveIntelligenceConsoleModal({
   const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews'>('diagnostics');
   const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'NEGATIVE' | 'POSITIVE'>('ALL');
   
+  // Calculator State
+  const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
+  const [asp, setAsp] = useState<number>(999);
+  const [returnCost, setReturnCost] = useState<number>(180);
+  
   const intelligence = product.intelligence;
   
   if (!intelligence) {
@@ -257,6 +262,15 @@ function ExecutiveIntelligenceConsoleModal({
   };
   
   const filteredReviews = reviews?.filter((r: any) => reviewFilter === 'ALL' || r.badge === reviewFilter) || [];
+  
+  // Calculator Logic
+  const formatINR = (num: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
+  };
+  
+  const riskScore = productSummary?.returnRiskScore || 0;
+  const projectedBleed = monthlyUnits * (riskScore / 100) * returnCost;
+  const recoverableMargin = projectedBleed * 0.40;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
@@ -300,6 +314,74 @@ function ExecutiveIntelligenceConsoleModal({
               <div className="flex items-end gap-2">
                 <span className="text-4xl font-black tabular-nums">{productSummary?.listingHealthScore || 0}</span>
                 <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Financial Margin Recovery Calculator */}
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">
+            <div>
+              <h4 className="text-lg font-semibold text-white">ROI & Margin Recovery Calculator</h4>
+              <p className="text-sm text-neutral-400 mt-1">Estimate preventable losses using the AI return risk score and calculate actionable recovery.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Inputs */}
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-neutral-300">Monthly Units Sold</label>
+                  <input 
+                    type="number" 
+                    value={monthlyUnits} 
+                    onChange={(e) => setMonthlyUnits(Number(e.target.value) || 0)}
+                    className="bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full max-w-xs"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-neutral-300">Average Selling Price (ASP)</label>
+                  <div className="relative max-w-xs">
+                    <span className="absolute left-3 top-2.5 text-neutral-500">₹</span>
+                    <input 
+                      type="number" 
+                      value={asp} 
+                      onChange={(e) => setAsp(Number(e.target.value) || 0)}
+                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-8 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-neutral-300">Return Logistics Cost per Unit</label>
+                  <div className="relative max-w-xs">
+                    <span className="absolute left-3 top-2.5 text-neutral-500">₹</span>
+                    <input 
+                      type="number" 
+                      value={returnCost} 
+                      onChange={(e) => setReturnCost(Number(e.target.value) || 0)}
+                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-8 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Outputs */}
+              <div className="flex flex-col gap-4 justify-center">
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-5 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+                  <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">Monthly Financial Bleed</span>
+                  <div className="text-3xl font-black text-white mt-1 mb-2 tabular-nums">{formatINR(projectedBleed)}</div>
+                  <span className="text-xs text-rose-300/80 bg-rose-500/10 px-2 py-1 rounded inline-block border border-rose-500/20">
+                    Logistics + processing loss on preventable returns
+                  </span>
+                </div>
+                
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 shadow-[0_0_15px_rgba(16,185,129,0.05)] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Recoverable Profit</span>
+                  <div className="text-3xl font-black text-emerald-400 mt-1 mb-2 tabular-nums">{formatINR(recoverableMargin)}</div>
+                  <span className="text-xs text-emerald-300/80 bg-emerald-500/10 px-2 py-1 rounded inline-block border border-emerald-500/20">
+                    With ReviewLens Listing & QC Mitigation
+                  </span>
+                </div>
               </div>
             </div>
           </div>
