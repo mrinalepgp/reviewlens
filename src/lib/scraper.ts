@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { cleanAndParseJSON } from './ai';
 
 export type Marketplace = 'meesho' | 'flipkart' | 'amazon' | 'facebook' | 'zomato' | 'swiggy' | 'unknown';
 
@@ -382,7 +383,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       generationConfig: {
         temperature: 0.2,
         topP: 0.8,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json"
       }
     };
@@ -427,9 +428,22 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     
     let parsedData: any = {};
     try {
-        parsedData = JSON.parse(jsonText);
-    } catch (e) {
-        throw new Error(`Failed to parse JSON from AI: ${jsonText}`);
+        parsedData = cleanAndParseJSON(jsonText);
+        if (typeof parsedData !== 'object' || parsedData === null) {
+            throw new Error("Parsed JSON is not an object");
+        }
+    } catch (e: any) {
+        console.error(`[Live Scraper] JSON Parse Error:`, e.message, 'Raw text:', jsonText);
+        parsedData = {
+            reviews: [],
+            error: "Failed to parse AI response",
+            executiveScorecard: {
+                returnRiskScore: 50,
+                listingHealthScore: 50,
+                estimatedMarginLossRange: "Unknown",
+                primaryRiskDriver: "AI Parse Error"
+            }
+        };
     }
 
     const rawReviews = parsedData.reviews || (Array.isArray(parsedData) ? parsedData : []);

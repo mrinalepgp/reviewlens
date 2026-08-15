@@ -33,6 +33,13 @@ const responseSchema: Schema = {
   required: ["sentiment", "detected_issue"],
 };
 
+export function cleanAndParseJSON(rawText: string) {
+  let clean = rawText.trim();
+  // Remove markdown ```json and ``` if present
+  clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  return JSON.parse(clean);
+}
+
 async function generateContentSafe(model: any, prompt: string, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -75,7 +82,7 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
         responseSchema: responseSchema,
         temperature: 0.2,
         topP: 0.8,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 8192,
       },
     });
 
@@ -87,7 +94,13 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
     }
 
     // Safely parse the strict JSON response format requested
-    const parsedData = JSON.parse(outputContent) as AnalysisResult;
+    let parsedData: AnalysisResult;
+    try {
+      parsedData = cleanAndParseJSON(outputContent) as AnalysisResult;
+    } catch (err: any) {
+      console.error('[AI] JSON Parse Error in analyzeReviewSentiment:', err.message, 'Raw text:', outputContent);
+      return { sentiment: 'neutral', detected_issue: 'analysis_error' };
+    }
 
     // Basic runtime validation guard rails
     if (!['positive', 'negative', 'neutral'].includes(parsedData.sentiment)) {
@@ -176,7 +189,7 @@ export async function generateHeadToHeadComparison(baseIntelligence: any, rivalI
       responseSchema: schema,
       temperature: 0.2,
       topP: 0.8,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 8192,
     },
   });
 
@@ -193,7 +206,12 @@ ${JSON.stringify(rivalIntelligence, null, 2)}
     const outputContent = result.response.text();
     if (!outputContent) throw new Error('Empty response');
     
-    return JSON.parse(outputContent) as HeadToHeadMatrix;
+    try {
+      return cleanAndParseJSON(outputContent) as HeadToHeadMatrix;
+    } catch (parseError: any) {
+      console.error('[AI] JSON Parse Error in generateHeadToHeadComparison:', parseError.message, 'Raw text:', outputContent);
+      throw parseError; // Caught by outer try-catch for fallback
+    }
   } catch (error) {
     console.error('[AI] Failed to generate head-to-head matrix:', error);
     // Fallback stub
