@@ -31,7 +31,7 @@ export default function Home() {
       <main>
         {/* Hero Section */}
         <section className="relative overflow-hidden pt-24 pb-32 sm:pt-32 sm:pb-40 lg:pb-48">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-3xl h-[500px] bg-indigo-500/20 blur-[120px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[800px] h-[600px] bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-blue-500/20 blur-[120px] rounded-full pointer-events-none" />
           
           <div className="container mx-auto px-4 sm:px-6 relative z-10 max-w-5xl text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-indigo-300 mb-8">
@@ -68,9 +68,25 @@ export default function Home() {
             </Link>
             </div>
 
-            <p className="mt-16 text-sm font-semibold text-neutral-500 uppercase tracking-widest animate-in fade-in duration-1000 delay-300">
-              Engineered for high-volume sellers on Flipkart, Meesho & D2C Marketplaces
-            </p>
+            <div className="mt-16 flex flex-col items-center gap-6 animate-in fade-in duration-1000 delay-300">
+              <p className="text-sm font-semibold text-neutral-500 uppercase tracking-widest text-center">
+                Engineered for high-volume sellers on
+              </p>
+              <div className="flex flex-wrap justify-center gap-4">
+                <div className="px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                  <div className="w-5 h-5 rounded-full bg-[#f9ce34] flex items-center justify-center text-black font-bold text-[10px]">F</div>
+                  <span className="text-neutral-300 font-medium text-sm">Flipkart</span>
+                </div>
+                <div className="px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                  <div className="w-5 h-5 rounded-full bg-[#f43397] flex items-center justify-center text-white font-bold text-[10px]">M</div>
+                  <span className="text-neutral-300 font-medium text-sm">Meesho</span>
+                </div>
+                <div className="px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                  <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold text-[10px]">D</div>
+                  <span className="text-neutral-300 font-medium text-sm">D2C Brands</span>
+                </div>
+              </div>
+            </div>
 
             {/* Glowing Product Console Preview */}
             <div className="mt-8 relative max-w-4xl mx-auto rounded-2xl border border-white/10 bg-neutral-900/50 p-2 sm:p-4 shadow-2xl backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-12 duration-1000 delay-500">
@@ -88,15 +104,49 @@ export default function Home() {
                       <div className="text-neutral-400 text-xs mt-2 uppercase tracking-wider font-semibold">Margin Loss</div>
                     </div>
                   </div>
-                  <div className="w-full max-w-lg p-4 border border-white/10 bg-white/5 rounded-xl flex items-center justify-between gap-4 backdrop-blur-md shadow-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="relative flex h-3 w-3">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  {/* Critical Defect Header */}
+                  <div className="w-full max-w-lg p-4 border border-white/10 bg-white/5 rounded-xl flex flex-col gap-4 backdrop-blur-md shadow-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                        </div>
+                        <div className="text-sm text-neutral-200 font-medium">Critical Defect: Size Misalignment</div>
                       </div>
-                      <div className="text-sm text-neutral-200 font-medium">Critical Defect: Size Misalignment</div>
+                      <div className="px-3 py-1 bg-red-500/20 text-red-300 text-[10px] uppercase rounded-full font-bold tracking-widest">Action Req</div>
                     </div>
-                    <div className="px-3 py-1 bg-red-500/20 text-red-300 text-xs rounded-full font-semibold">ACTION REQ</div>
+
+                    {/* Defect Breakdown Bars */}
+                    <div className="space-y-3 pt-3 border-t border-white/5">
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs text-neutral-400">
+                          <span>Performance Issues</span>
+                          <span className="text-neutral-300">60%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: '60%' }} />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs text-neutral-400">
+                          <span>Sizing Complaints</span>
+                          <span className="text-neutral-300">20%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className="h-full bg-red-500 rounded-full" style={{ width: '20%' }} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actionable Mitigation Preview Badge */}
+                    <div className="mt-2 flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        <span className="text-xs text-emerald-300 font-medium">Mitigation Plan Generated</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-400/80 uppercase font-semibold tracking-wider">Ready to apply</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -105,8 +155,9 @@ export default function Home() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="py-24 bg-neutral-950 border-t border-white/5">
-          <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
+        <section id="features" className="py-24 bg-neutral-950 border-t border-white/5 relative overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[600px] bg-gradient-to-tr from-purple-500/10 to-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
+          <div className="container mx-auto px-4 sm:px-6 max-w-6xl relative z-10">
             <div className="text-center mb-16">
               <h2 className="text-3xl font-bold tracking-tight mb-4">Everything a modern seller needs</h2>
               <p className="text-neutral-400 max-w-xl mx-auto">Stop guessing what your customers want. Let our intelligent pipeline extract, interpret, and present the raw truth.</p>
