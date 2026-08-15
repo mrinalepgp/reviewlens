@@ -30,7 +30,7 @@ export default function Home() {
 
       <main>
         {/* Hero Section */}
-        <section className="relative overflow-hidden pt-24 pb-32 sm:pt-32 sm:pb-40 lg:pb-48">
+        <section className="relative overflow-hidden pt-20 pb-16 sm:pt-24 sm:pb-20 lg:pb-24">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[800px] h-[600px] bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-blue-500/20 blur-[120px] rounded-full pointer-events-none" />
           
           <div className="container mx-auto px-4 sm:px-6 relative z-10 max-w-5xl text-center">
@@ -40,14 +40,14 @@ export default function Home() {
             </div>
             
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-8">
-              Decode customer intent with{' '}
+              Stop E-Commerce Return Bleed with{' '}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                AI vernacular analysis.
+                AI Intelligence.
               </span>
             </h1>
             
             <p className="text-lg sm:text-xl text-neutral-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Instantly scrape e-commerce reviews and leverage AI to uncover hidden sentiments, local dialects, and buying trends that standard sentiment analysis misses.
+              Instantly analyze Flipkart & Meesho reviews, pinpoint root-cause defects, and recover lost margins before they hurt your bottom line.
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
@@ -68,7 +68,7 @@ export default function Home() {
             </Link>
             </div>
 
-            <div className="mt-16 flex flex-col items-center gap-6 animate-in fade-in duration-1000 delay-300">
+            <div className="mt-12 flex flex-col items-center gap-6 animate-in fade-in duration-1000 delay-300">
               <p className="text-sm font-semibold text-neutral-500 uppercase tracking-widest text-center">
                 Engineered for high-volume sellers on
               </p>
@@ -155,7 +155,7 @@ export default function Home() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="py-24 bg-neutral-950 border-t border-white/5 relative overflow-hidden">
+        <section id="features" className="py-16 sm:py-20 bg-neutral-950 border-t border-white/5 relative overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[600px] bg-gradient-to-tr from-purple-500/10 to-indigo-500/10 blur-[120px] rounded-full pointer-events-none" />
           <div className="container mx-auto px-4 sm:px-6 max-w-6xl relative z-10">
             <div className="text-center mb-16">
@@ -206,6 +206,21 @@ export default function Home() {
                 <p className="text-neutral-400 text-sm leading-relaxed">
                   Detect review bombing, fake accounts, and generate marketplace dispute tickets to protect your brand health.
                 </p>
+              </div>
+            </div>
+
+            {/* Bottom CTA */}
+            <div className="mt-20 sm:mt-24 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-900/40 to-neutral-900/40 p-8 sm:p-12 text-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-20" />
+              <div className="relative z-10 max-w-2xl mx-auto">
+                <h3 className="text-3xl font-bold text-white mb-4">Ready to stop preventable return losses?</h3>
+                <p className="text-neutral-400 mb-8">Join the top D2C brands proactively saving margins every day.</p>
+                <Link 
+                  href="/login" 
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3.5 rounded-full font-medium text-lg transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
+                >
+                  Analyze Your Catalog Free &rarr;
+                </Link>
               </div>
             </div>
           </div>
