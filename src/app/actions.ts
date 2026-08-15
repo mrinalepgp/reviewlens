@@ -308,6 +308,13 @@ export async function fetchDashboardStateAction() {
       .eq('id', user.id)
       .single();
 
+    // Get Seller (for whatsapp)
+    const { data: seller } = await supabase
+      .from('sellers')
+      .select('whatsapp_number')
+      .eq('id', user.id)
+      .single();
+
     // Get historical data
     const { data: products } = await supabase
       .from('tracked_products')
@@ -331,6 +338,8 @@ export async function fetchDashboardStateAction() {
       success: true,
       user: {
         email: user.email,
+        full_name: profile?.full_name || '',
+        whatsapp_number: seller?.whatsapp_number || '',
         initials: user.email ? user.email.substring(0, 2).toUpperCase() : 'US',
         credits: profile?.credits ?? 0,
         plan: profile?.plan_tier ?? 'Hobby'
@@ -378,6 +387,33 @@ export async function clearAllHistoryAction() {
     return { success: true };
   } catch (err: any) {
     console.error("[Action] Failed to clear history:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateUserProfileAction(fullName: string, whatsappNumber: string, password?: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    if (password) {
+      const { error: passErr } = await supabase.auth.updateUser({ password });
+      if (passErr) throw passErr;
+    }
+
+    const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user.id);
+    if (profErr) throw profErr;
+
+    const { error: sellErr } = await supabase.from('sellers').update({ 
+      full_name: fullName,
+      whatsapp_number: whatsappNumber
+    }).eq('id', user.id);
+    if (sellErr) throw sellErr;
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("[Action] Failed to update user profile:", err);
     return { success: false, error: err.message };
   }
 }

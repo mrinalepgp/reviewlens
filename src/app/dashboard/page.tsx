@@ -3,7 +3,8 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction, updateUserProfileAction } from '@/app/actions';
+import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -726,6 +727,180 @@ function ExecutiveIntelligenceConsoleModal({
   );
 }
 
+function SettingsModal({ 
+  isOpen, 
+  onClose, 
+  userState, 
+  onUpdate 
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  userState: any, 
+  onUpdate: (updates: any) => void 
+}) {
+  const [fullName, setFullName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
+
+  useEffect(() => {
+    if (isOpen && userState) {
+      setFullName(userState.full_name || '');
+      setWhatsapp(userState.whatsapp_number || '');
+    }
+  }, [isOpen, userState]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setToast(null);
+    const res = await updateUserProfileAction(fullName, whatsapp, password || undefined);
+    setIsLoading(false);
+    if (res.success) {
+      setToast({ msg: 'Profile updated successfully', type: 'success' });
+      onUpdate({ full_name: fullName, whatsapp_number: whatsapp });
+      setPassword('');
+      setTimeout(() => { setToast(null); onClose(); }, 2000);
+    } else {
+      setToast({ msg: res.error || 'Failed to update', type: 'error' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-center p-5 border-b border-white/10">
+          <h2 className="text-lg font-bold text-white">Account Settings</h2>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
+          {toast && (
+            <div className={`p-3 rounded-lg text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+              {toast.msg}
+            </div>
+          )}
+          
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-neutral-300">Full Name</label>
+            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+          </div>
+          
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-neutral-300">WhatsApp Number</label>
+            <input type="text" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+          </div>
+
+          <div className="flex flex-col gap-1.5 mt-2">
+            <label className="text-sm font-medium text-neutral-300">Change Password (Optional)</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep current" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-neutral-600" />
+          </div>
+
+          <div className="mt-4 flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white transition-colors">Cancel</button>
+            <button type="submit" disabled={isLoading} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50">
+              {isLoading ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BillingModal({ isOpen, onClose, userState }: { isOpen: boolean, onClose: () => void, userState: any }) {
+  const [toast, setToast] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const handleUpgradeClick = () => {
+    setToast("Stripe Checkout simulation: Contacting Sales...");
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const maxCredits = 50;
+  const creditsUsed = Math.max(0, maxCredits - (userState?.credits ?? 0));
+  const progressPercent = Math.min(100, Math.round((creditsUsed / maxCredits) * 100));
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex justify-between items-center p-5 border-b border-white/10">
+          <h2 className="text-lg font-bold text-white">Billing & Usage</h2>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        
+        <div className="p-6 flex flex-col gap-8 overflow-y-auto max-h-[80vh]">
+          {toast && (
+            <div className="p-3 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg text-sm font-medium text-center">
+              {toast}
+            </div>
+          )}
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col gap-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Current Plan</h3>
+                <p className="text-2xl font-black text-white mt-1">{userState?.plan?.toUpperCase() || 'HOBBY'} PLAN</p>
+              </div>
+              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase">Active</span>
+            </div>
+            
+            <div className="space-y-2 mt-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-neutral-300 font-medium">SKU Audits Used</span>
+                <span className="text-white font-bold">{creditsUsed} / {maxCredits}</span>
+              </div>
+              <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+              </div>
+              <p className="text-xs text-neutral-500 text-right">{userState?.credits ?? 0} credits remaining</p>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold text-white mb-4">Upgrade Your Plan</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-black/40 border border-indigo-500/30 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:border-indigo-500 transition-colors">
+                <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">POPULAR</div>
+                <div>
+                  <h4 className="text-lg font-bold text-white">Pro Seller</h4>
+                  <p className="text-2xl font-black text-indigo-400 mt-1">₹1,999<span className="text-sm text-neutral-500 font-medium">/mo</span></p>
+                </div>
+                <ul className="space-y-2 text-sm text-neutral-300 flex-1">
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 500 SKU Audits/mo</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Competitor Radar</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Automated CSV Sync</li>
+                </ul>
+                <button onClick={handleUpgradeClick} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-all mt-2">Upgrade to Pro</button>
+              </div>
+
+              <div className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col gap-4 hover:border-white/30 transition-colors">
+                <div>
+                  <h4 className="text-lg font-bold text-white">Enterprise / D2C</h4>
+                  <p className="text-2xl font-black text-white mt-1">Custom</p>
+                </div>
+                <ul className="space-y-2 text-sm text-neutral-300 flex-1">
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Audits</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Dedicated Account Manager</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> API Access</li>
+                </ul>
+                <button onClick={handleUpgradeClick} className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-all mt-2">Contact Sales</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Main Page ---
 
 const MOCK_HISTORICAL_DATA: AnalyzedProductSummary[] = [
@@ -768,6 +943,8 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
   const [userState, setUserState] = useState<any>(null);
 
   useEffect(() => {
@@ -840,6 +1017,29 @@ export default function Dashboard() {
     }
   };
 
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
+
+  const getDisplayName = () => {
+    if (userState?.full_name) return userState.full_name;
+    if (userState?.email) return userState.email.split('@')[0];
+    return 'User';
+  };
+
+  const getInitials = () => {
+    const name = getDisplayName();
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    } else if (name.length > 0) {
+      return name.substring(0, 2).toUpperCase();
+    }
+    return 'US';
+  };
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 selection:bg-indigo-500/30">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-neutral-950/80 backdrop-blur-md">
@@ -856,7 +1056,7 @@ export default function Dashboard() {
               ⚡ Load Demo Data
             </button>
             
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsBillingModalOpen(true)}>
               <span className="text-xs font-bold text-amber-400">⚡ {userState?.credits ?? 0}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
@@ -864,25 +1064,25 @@ export default function Dashboard() {
             <div className="relative">
               <button onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} className="flex items-center gap-2 focus:outline-none">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white border border-white/10 shadow-sm">
-                  {userState?.initials ?? 'US'}
+                  {getInitials()}
                 </div>
               </button>
               
               {isUserDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-white/10">
-                    <p className="text-sm font-medium text-white">{userState?.email || 'User'}</p>
+                    <p className="text-sm font-medium text-white truncate">{getDisplayName()}</p>
                     <p className="text-xs text-neutral-400 truncate mt-0.5">{userState?.email || 'No email'}</p>
                     <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
                       {userState?.plan ?? 'Hobby'} Plan
                     </div>
                   </div>
                   <div className="py-1">
-                    <Link href="#" className="block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Account Settings</Link>
-                    <Link href="#" className="block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Billing & Usage</Link>
+                    <button onClick={() => { setIsSettingsModalOpen(true); setIsUserDropdownOpen(false); }} className="w-full text-left block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Account Settings</button>
+                    <button onClick={() => { setIsBillingModalOpen(true); setIsUserDropdownOpen(false); }} className="w-full text-left block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Billing & Usage</button>
                   </div>
                   <div className="border-t border-white/10 pt-1 mt-1">
-                    <button className="w-full text-left px-4 py-2 text-sm text-rose-400 hover:bg-white/5 transition-colors">
+                    <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-rose-400 hover:bg-white/5 transition-colors">
                       Sign out
                     </button>
                   </div>
@@ -936,6 +1136,19 @@ export default function Dashboard() {
           onClose={() => setSelectedProduct(null)} 
         />
       )}
+
+      <SettingsModal 
+        isOpen={isSettingsModalOpen} 
+        onClose={() => setIsSettingsModalOpen(false)} 
+        userState={userState}
+        onUpdate={(updates) => setUserState((prev: any) => ({ ...prev, ...updates }))}
+      />
+
+      <BillingModal
+        isOpen={isBillingModalOpen}
+        onClose={() => setIsBillingModalOpen(false)}
+        userState={userState}
+      />
     </div>
   );
 }
