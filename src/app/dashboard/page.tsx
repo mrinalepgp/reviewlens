@@ -3,7 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction } from '@/app/actions';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -273,8 +273,14 @@ function RiskRadar({
             ))}
           </div>
         ) : results.length === 0 ? (
-          <div className="flex items-center justify-center h-32 rounded-xl border border-dashed border-white/10 text-sm text-neutral-500">
-            Awaiting input URLs to begin analysis...
+          <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-dashed border-white/10 text-center gap-3">
+            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold text-neutral-300">No products monitored yet</h3>
+            <p className="text-xs text-neutral-500 max-w-xs">Enter a Meesho or Flipkart URL to run your first AI audit.</p>
           </div>
         ) : (
           results.map((alert, idx) => (
@@ -296,11 +302,11 @@ function RiskRadar({
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                {/* Vernacular Snippet (Mock if unavailable) */}
+                {/* Vernacular Snippet */}
                 <div className="bg-white/5 border border-white/10 rounded-lg p-3 relative">
                   <span className="absolute -top-2 left-3 bg-neutral-900 px-1 text-[10px] font-bold text-neutral-400 uppercase">Raw Vernacular</span>
                   <p className="text-xs text-neutral-300 italic line-clamp-2 mt-1 font-serif">
-                    "Kapda bohot patla hai aur size bhi chota aaya, fit nahi ho raha thik se."
+                    "{alert.intelligence?.vernacularDecoder?.[0]?.context || alert.intelligence?.reviews?.[0]?.reviewText || 'No raw feedback available.'}"
                   </p>
                 </div>
                 
@@ -308,7 +314,7 @@ function RiskRadar({
                 <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-lg p-3 relative">
                   <span className="absolute -top-2 left-3 bg-neutral-900 px-1 text-[10px] font-bold text-indigo-400 uppercase">AI Root-Cause</span>
                   <p className="text-xs text-indigo-200 line-clamp-2 mt-1 font-medium">
-                    Critical sizing mismatch (runs small) combined with poor material thickness complaints.
+                    {alert.intelligence?.executiveScorecard?.primaryRiskDriver || 'No root cause identified.'}
                   </p>
                 </div>
               </div>
@@ -330,8 +336,30 @@ function RiskRadar({
   );
 }
 
-function HistoricalTable({ data, onSelectProduct }: { data: AnalyzedProductSummary[], onSelectProduct: (product: AnalyzedProductSummary) => void }) {
-  if (!data || data.length === 0) return null;
+function HistoricalTable({ 
+  data, 
+  onSelectProduct,
+  onDeleteProduct,
+  onClearAll
+}: { 
+  data: AnalyzedProductSummary[], 
+  onSelectProduct: (product: AnalyzedProductSummary) => void,
+  onDeleteProduct: (id: string) => void,
+  onClearAll: () => void
+}) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-4 mt-8">
+        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+          <svg className="w-8 h-8 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-bold text-white">No products monitored yet</h3>
+        <p className="text-neutral-400 text-sm max-w-md">Enter a Meesho or Flipkart URL to run your first AI audit and start building your historical catalog.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-6 mt-8">
@@ -340,11 +368,17 @@ function HistoricalTable({ data, onSelectProduct }: { data: AnalyzedProductSumma
           <h2 className="text-lg font-semibold text-white">Historical Catalog Analysis</h2>
           <p className="text-sm text-neutral-400 mt-1">Review past AI reports and monitor listing performance.</p>
         </div>
-        <div className="relative">
-          <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input type="text" placeholder="Search SKUs..." className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="text" placeholder="Search SKUs..." className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+          </div>
+          <button onClick={onClearAll} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            Clear All History
+          </button>
         </div>
       </div>
 
@@ -371,9 +405,16 @@ function HistoricalTable({ data, onSelectProduct }: { data: AnalyzedProductSumma
                   <RiskBadge status={item.riskAssessment} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button onClick={() => onSelectProduct(item)} className="text-indigo-400 hover:text-indigo-300 font-medium text-xs">
-                    Deep Dive →
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button onClick={() => onSelectProduct(item)} className="text-indigo-400 hover:text-indigo-300 font-medium text-xs">
+                      Deep Dive →
+                    </button>
+                    {item.id && (
+                      <button onClick={() => onDeleteProduct(item.id!)} className="text-neutral-500 hover:text-rose-400 transition-colors p-1" title="Delete Product">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -778,6 +819,27 @@ export default function Dashboard() {
     }
   };
 
+  const handleDeleteProduct = async (id: string) => {
+    const res = await deleteProductAction(id);
+    if (res.success) {
+      setHistoricalData(prev => prev.filter(p => p.id !== id));
+      setResults(prev => prev.filter(p => p.id !== id));
+    } else {
+      setError("Failed to delete product: " + res.error);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
+    const res = await clearAllHistoryAction();
+    if (res.success) {
+      setHistoricalData([]);
+      setResults([]);
+    } else {
+      setError("Failed to clear history: " + res.error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 selection:bg-indigo-500/30">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-neutral-950/80 backdrop-blur-md">
@@ -860,7 +922,12 @@ export default function Dashboard() {
         </div>
 
         {/* 4. Historical Table */}
-        <HistoricalTable data={historicalData} onSelectProduct={setSelectedProduct} />
+        <HistoricalTable 
+          data={historicalData} 
+          onSelectProduct={setSelectedProduct} 
+          onDeleteProduct={handleDeleteProduct}
+          onClearAll={handleClearAll}
+        />
       </main>
 
       {selectedProduct && (

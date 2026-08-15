@@ -43,6 +43,16 @@ export async function signup(formData: FormData) {
       if (sellerError) {
           console.error("Failed to insert seller record:", sellerError)
       }
+
+      const { error: profileError } = await supabase.from('user_profiles').insert({
+          id: data.user.id,
+          credits: 50,
+          full_name: fullName
+      })
+
+      if (profileError) {
+          console.error("Failed to insert user profile record:", profileError)
+      }
     }
   } catch (error: any) {
     console.error("Exact connection error to server console during signup:", error);

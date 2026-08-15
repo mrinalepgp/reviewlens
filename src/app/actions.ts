@@ -342,3 +342,42 @@ export async function fetchDashboardStateAction() {
     return { success: false, error: err.message };
   }
 }
+
+export async function deleteProductAction(productId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+      .from('tracked_products')
+      .delete()
+      .eq('id', productId)
+      .eq('seller_id', user.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error("[Action] Failed to delete product:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function clearAllHistoryAction() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    const { error } = await supabase
+      .from('tracked_products')
+      .delete()
+      .eq('seller_id', user.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error("[Action] Failed to clear history:", err);
+    return { success: false, error: err.message };
+  }
+}
