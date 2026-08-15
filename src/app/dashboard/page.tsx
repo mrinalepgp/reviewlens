@@ -872,7 +872,7 @@ function SettingsManagerModal({
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-neutral-300">Full Name</label>
-        <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+        <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Rahul Sharma" required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors placeholder:text-neutral-600" />
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-neutral-300">Company / Brand Name</label>
@@ -880,7 +880,7 @@ function SettingsManagerModal({
       </div>
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-medium text-neutral-300">Verified WhatsApp Number</label>
-        <input type="text" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+        <input type="text" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="e.g. +91 98765 43210" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors placeholder:text-neutral-600" />
       </div>
       <div className="flex items-center gap-3 mt-2 bg-white/5 p-4 rounded-xl border border-white/5">
         <div className="flex-1">

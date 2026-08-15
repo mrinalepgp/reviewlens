@@ -338,7 +338,7 @@ export async function fetchDashboardStateAction() {
       success: true,
       user: {
         email: user.email,
-        full_name: profile?.full_name || '',
+        full_name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
         whatsapp_number: seller?.whatsapp_number || '',
         company_name: user.user_metadata?.company_name || '',
         whatsapp_alerts_enabled: user.user_metadata?.whatsapp_alerts_enabled || false,
