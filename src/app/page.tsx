@@ -237,35 +237,38 @@ export default function Home() {
               {/* Starter */}
               <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col">
                 <h3 className="text-xl font-semibold mb-2">Starter</h3>
-                <div className="text-4xl font-bold mb-6">Free<span className="text-lg text-neutral-500 font-normal"> /trial</span></div>
+                <div className="text-4xl font-bold mb-6">₹0<span className="text-lg text-neutral-500 font-normal"> /mo</span></div>
                 <ul className="space-y-4 mb-8 flex-1 text-sm text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 50 reviews/day</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Basic defect tagging</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 5 Product Scans/mo</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Standard Flipkart/Meesho Parser</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Defect Breakdown</li>
                 </ul>
-                <Link href="/signup" className="w-full py-3 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-medium">Start Free</Link>
+                <Link href="/login" className="w-full py-3 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-medium">Start Free</Link>
               </div>
               {/* Growth */}
               <div className="p-8 rounded-2xl bg-gradient-to-b from-indigo-900/20 to-transparent border border-indigo-500/30 flex flex-col relative">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-full">Most Popular</div>
-                <h3 className="text-xl font-semibold mb-2">Growth</h3>
-                <div className="text-4xl font-bold mb-6">$49<span className="text-lg text-neutral-500 font-normal"> /mo</span></div>
+                <h3 className="text-xl font-semibold mb-2">Growth Pro</h3>
+                <div className="text-4xl font-bold mb-6">₹2,999<span className="text-lg text-neutral-500 font-normal"> /mo</span></div>
                 <ul className="space-y-4 mb-8 flex-1 text-sm text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Flipkart/Meesho scraping</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Automated supplier memos</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Competitor comparison</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Scrapes</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Vernacular NLP</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Automated Supplier Memos</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Profit Bleed Calculator</li>
                 </ul>
-                <Link href="/signup" className="w-full py-3 rounded-full text-center bg-indigo-600 hover:bg-indigo-700 transition-colors font-medium text-white shadow-lg shadow-indigo-500/25">Get Started</Link>
+                <Link href="/login" className="w-full py-3 rounded-full text-center bg-indigo-600 hover:bg-indigo-700 transition-colors font-medium text-white shadow-lg shadow-indigo-500/25">Get Started</Link>
               </div>
               {/* Enterprise */}
               <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 flex flex-col">
                 <h3 className="text-xl font-semibold mb-2">Enterprise</h3>
                 <div className="text-4xl font-bold mb-6">Custom</div>
                 <ul className="space-y-4 mb-8 flex-1 text-sm text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Custom API access</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Multi-account radar</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Dedicated support</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Multi-Brand Radar</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> API Webhooks</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Competitor Benchmarking</li>
+                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Dedicated Dispute Specialist</li>
                 </ul>
-                <Link href="/signup" className="w-full py-3 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-medium">Contact Sales</Link>
+                <Link href="/login" className="w-full py-3 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-medium">Contact Sales</Link>
               </div>
             </div>
           </div>
@@ -275,21 +278,21 @@ export default function Home() {
         <section id="docs" className="py-20 bg-neutral-950 border-t border-white/5">
           <div className="container mx-auto px-4 sm:px-6 max-w-4xl">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight mb-4">How It Works (Docs)</h2>
-              <p className="text-neutral-400 max-w-xl mx-auto">Get up and running with ReviewLens in minutes.</p>
+              <h2 className="text-3xl font-bold tracking-tight mb-4">Frequently Asked Questions</h2>
+              <p className="text-neutral-400 max-w-xl mx-auto">Everything you need to know about how ReviewLens protects your margins.</p>
             </div>
             <div className="space-y-6">
               <div className="p-6 rounded-xl border border-white/10 bg-white/[0.02]">
-                <h3 className="text-lg font-semibold mb-2 text-white">1. AI Scraper Engine</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">Paste any Flipkart or Meesho product URL. Our engine bypasses CAPTCHAs, aggregates hundreds of reviews, and feeds them directly into the analysis queue—no coding required.</p>
+                <h3 className="text-lg font-semibold mb-2 text-white">How does ReviewLens bypass marketplace bot protections?</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed">We utilize a resilient, real-time extraction pipeline that mimics natural user navigation. This allows us to securely aggregate public review data without triggering CAPTCHAs or being blocked by marketplace anti-bot systems.</p>
               </div>
               <div className="p-6 rounded-xl border border-white/10 bg-white/[0.02]">
-                <h3 className="text-lg font-semibold mb-2 text-white">2. Defect Taxonomy & Vernacular Analysis</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">Our LLM reads Hinglish and regional dialects, identifying specific product flaws (e.g., "stitching tear", "too small"). It categorizes these into actionable defect taxonomy metrics.</p>
+                <h3 className="text-lg font-semibold mb-2 text-white">How accurate is the Margin Loss formula?</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed">Highly accurate. Our intelligence engine calculates margin bleed by dynamically weighting your logistics average selling price (ASP), reverse shipping penalties, and return frequency based on verified defect complaints.</p>
               </div>
               <div className="p-6 rounded-xl border border-white/10 bg-white/[0.02]">
-                <h3 className="text-lg font-semibold mb-2 text-white">3. Dispute Tickets & Mitigation Playbooks</h3>
-                <p className="text-neutral-400 text-sm leading-relaxed">Based on the analysis, the system automatically drafts supplier quality memos and generates marketplace dispute tickets for fake review attacks, protecting your seller rating.</p>
+                <h3 className="text-lg font-semibold mb-2 text-white">Can I analyze competitor products?</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed">Yes. Because ReviewLens operates on 100% public URL intelligence, you do not need seller credentials to scrape a listing. Just paste any Flipkart or Meesho product URL to benchmark competitor defects instantly.</p>
               </div>
             </div>
           </div>
