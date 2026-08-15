@@ -12,8 +12,9 @@ export async function sendResetLink(formData: FormData) {
   const supabase = await createClient();
 
   // Redirect to /reset-password after clicking the link in the email
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://reviewlens-hazel.vercel.app';
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback?next=/reset-password`,
+    redirectTo: `${baseUrl}/auth/callback?next=/reset-password`,
   });
 
   if (error) {
