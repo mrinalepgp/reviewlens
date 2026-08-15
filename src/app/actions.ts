@@ -42,8 +42,24 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       throw new Error("Unauthorized. Please log in to run analyses.");
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('credits')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      throw new Error("Unable to fetch user profile or credits.");
+    }
+
+    if (profile.credits < urls.length) {
+      throw new Error(`Insufficient credits. You need ${urls.length} credits but have ${profile.credits}.`);
+    }
+
     console.log(`[Action] Starting batch analysis for ${urls.length} URLs...`);
     const summaries: AnalyzedProductSummary[] = [];
+
+    let currentCredits = profile.credits;
 
     for (const url of urls) {
       const scrapeResult = await fetchMarketplaceReviews(url);
@@ -172,6 +188,18 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             console.error("[Database] Failed to batch insert review_analysis records:", reviewsError.message);
           } else {
             console.log(`[Database] Successfully committed product metadata and ${reviewsToInsert.length} analysis records.`);
+            
+            // Deduct 1 credit for successful analysis
+            currentCredits -= 1;
+            const { error: creditError } = await supabase
+              .from('user_profiles')
+              .update({ credits: currentCredits })
+              .eq('id', user.id);
+            if (creditError) {
+               console.error("[Database] Failed to deduct credit:", creditError.message);
+            } else {
+               console.log(`[Database] Deducted 1 credit. Remaining: ${currentCredits}`);
+            }
           }
         }
       } catch (dbError) {
@@ -264,5 +292,53 @@ export async function compareCompetitorAction(baseIntelligence: any, competitorU
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error during comparison'
     };
+  }
+}
+
+export async function fetchDashboardStateAction() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    // Get Profile
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    // Get historical data
+    const { data: products } = await supabase
+      .from('tracked_products')
+      .select('*')
+      .eq('seller_id', user.id)
+      .order('id', { ascending: false });
+
+    // Format historical data
+    const historicalData: AnalyzedProductSummary[] = (products || []).map((p: any) => ({
+      id: p.id,
+      url: p.product_url,
+      platform: p.platform,
+      title: p.product_name,
+      averageScore: p.average_rating,
+      riskAssessment: p.risk_status,
+      negativeThemes: p.intelligence_data?.executiveScorecard?.primaryRiskDriver ? [p.intelligence_data.executiveScorecard.primaryRiskDriver] : [],
+      intelligence: p.intelligence_data
+    }));
+
+    return {
+      success: true,
+      user: {
+        email: user.email,
+        initials: user.email ? user.email.substring(0, 2).toUpperCase() : 'US',
+        credits: profile?.credits ?? 0,
+        plan: profile?.plan_tier ?? 'Hobby'
+      },
+      historicalData
+    };
+  } catch (err: any) {
+    console.error("[Action] Failed to fetch dashboard state:", err);
+    return { success: false, error: err.message };
   }
 }

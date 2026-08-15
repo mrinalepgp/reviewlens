@@ -3,7 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction } from '@/app/actions';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -12,31 +12,79 @@ type HealthStatus = 'safe' | 'warning' | 'critical';
 
 // --- Components ---
 
-function KPICards() {
+function KPICards({ data }: { data: AnalyzedProductSummary[] }) {
+  const activeSkus = data.length;
+  
+  if (activeSkus === 0) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Active Monitored SKUs</span>
+          <span className="text-3xl font-black text-white">0</span>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Avg. Return Risk</span>
+          <span className="text-3xl font-black text-neutral-400">N/A</span>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Top Defect Cause</span>
+          <span className="text-lg font-bold text-neutral-500 mt-1">No products analyzed</span>
+        </div>
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
+          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Capital Protected</span>
+          <span className="text-3xl font-black text-neutral-400">₹0</span>
+        </div>
+      </div>
+    );
+  }
+
+  const avgRisk = data.reduce((acc, curr) => acc + (curr.intelligence?.executiveScorecard?.returnRiskScore || 0), 0) / activeSkus;
+  
+  // Tally top defect
+  const defects = data.map(d => d.intelligence?.executiveScorecard?.primaryRiskDriver).filter(Boolean);
+  const defectCounts = defects.reduce((acc, val) => {
+    acc[val] = (acc[val] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const topDefect = Object.keys(defectCounts).sort((a, b) => defectCounts[b] - defectCounts[a])[0] || "Unknown";
+
+  // Calculate generic protected capital
+  const totalUnits = activeSkus * 1000;
+  const projectedBleed = totalUnits * (avgRisk / 100) * 180;
+  const protectedCapital = projectedBleed * 0.40;
+
+  const formatINR = (num: number) => {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
         <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Active Monitored SKUs</span>
-        <span className="text-3xl font-black text-white">18 <span className="text-sm text-neutral-500 font-medium">Products</span></span>
+        <span className="text-3xl font-black text-white">{activeSkus} <span className="text-sm text-neutral-500 font-medium">Products</span></span>
       </div>
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
         <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Avg. Return Risk</span>
         <div className="flex items-center gap-2">
-          <span className="text-3xl font-black text-rose-400">19.8%</span>
-          <span className="text-xs font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded">High</span>
+          <span className="text-3xl font-black text-rose-400">{avgRisk.toFixed(1)}%</span>
+          {avgRisk > 50 && <span className="text-xs font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded">High</span>}
         </div>
       </div>
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
         <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Top Defect Cause</span>
-        <span className="text-lg font-bold text-white mt-1">Fabric & Sizing Mismatch</span>
+        <span className="text-lg font-bold text-white mt-1 line-clamp-1">{topDefect}</span>
       </div>
       <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden shadow-[0_0_15px_rgba(16,185,129,0.05)]">
         <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
         <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Capital Protected</span>
-        <span className="text-3xl font-black text-emerald-400">₹2,14,000 <span className="text-sm text-emerald-500/70 font-medium">saved</span></span>
+        <span className="text-3xl font-black text-emerald-400">{formatINR(protectedCapital)}</span>
       </div>
     </div>
   );
@@ -680,6 +728,21 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [userState, setUserState] = useState<any>(null);
+
+  useEffect(() => {
+    async function loadInitialState() {
+      const res = await fetchDashboardStateAction();
+      if (res.success) {
+        setUserState(res.user);
+        setHistoricalData(res.historicalData || []);
+        setResults(res.historicalData || []);
+      } else {
+        setError(res.error || "Failed to load dashboard state.");
+      }
+    }
+    loadInitialState();
+  }, []);
 
   const loadDemoData = () => {
     setResults(MOCK_HISTORICAL_DATA);
@@ -700,6 +763,7 @@ export default function Dashboard() {
       if (response.success) {
         setResults((prev) => [...response.summaries, ...prev]);
         setHistoricalData((prev) => [...response.summaries, ...prev]);
+        setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, prev.credits - response.summaries.length) } : prev);
       } else {
         setError("Pipeline Error: " + response.error);
       }
@@ -731,24 +795,24 @@ export default function Dashboard() {
             </button>
             
             <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg">
-              <span className="text-xs font-bold text-amber-400">⚡ 42/50</span>
+              <span className="text-xs font-bold text-amber-400">⚡ {userState?.credits ?? 0}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
 
             <div className="relative">
               <button onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} className="flex items-center gap-2 focus:outline-none">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white border border-white/10 shadow-sm">
-                  JD
+                  {userState?.initials ?? 'US'}
                 </div>
               </button>
               
               {isUserDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-neutral-900 border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-white/10">
-                    <p className="text-sm font-medium text-white">John Doe</p>
-                    <p className="text-xs text-neutral-400 truncate mt-0.5">john@ecombrand.com</p>
+                    <p className="text-sm font-medium text-white">{userState?.email || 'User'}</p>
+                    <p className="text-xs text-neutral-400 truncate mt-0.5">{userState?.email || 'No email'}</p>
                     <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 uppercase tracking-wider">
-                      Pro Plan
+                      {userState?.plan ?? 'Hobby'} Plan
                     </div>
                   </div>
                   <div className="py-1">
@@ -781,7 +845,7 @@ export default function Dashboard() {
         )}
 
         {/* 1. KPI Metrics */}
-        <KPICards />
+        <KPICards data={historicalData} />
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* 2. Bulk Product Ingestion Card */}
