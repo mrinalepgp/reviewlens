@@ -1,6 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const searchParams = props.searchParams ? await props.searchParams : undefined;
+  const code = searchParams?.code;
+  if (code && typeof code === 'string') {
+    redirect(`/auth/callback?code=${code}&next=/reset-password`);
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-50 selection:bg-indigo-500/30">
       {/* Navigation Bar */}
