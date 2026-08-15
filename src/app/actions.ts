@@ -340,6 +340,9 @@ export async function fetchDashboardStateAction() {
         email: user.email,
         full_name: profile?.full_name || '',
         whatsapp_number: seller?.whatsapp_number || '',
+        company_name: user.user_metadata?.company_name || '',
+        whatsapp_alerts_enabled: user.user_metadata?.whatsapp_alerts_enabled || false,
+        providers: user.app_metadata?.providers || [],
         initials: user.email ? user.email.substring(0, 2).toUpperCase() : 'US',
         credits: profile?.credits ?? 0,
         plan: profile?.plan_tier ?? 'Hobby'
@@ -391,16 +394,24 @@ export async function clearAllHistoryAction() {
   }
 }
 
-export async function updateUserProfileAction(fullName: string, whatsappNumber: string, password?: string) {
+export async function updateUserProfileAction(fullName: string, whatsappNumber: string, companyName: string, whatsappAlertsEnabled: boolean, password?: string) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
+    const updatePayload: any = {
+      data: {
+        company_name: companyName,
+        whatsapp_alerts_enabled: whatsappAlertsEnabled
+      }
+    };
     if (password) {
-      const { error: passErr } = await supabase.auth.updateUser({ password });
-      if (passErr) throw passErr;
+      updatePayload.password = password;
     }
+
+    const { error: authErr } = await supabase.auth.updateUser(updatePayload);
+    if (authErr) throw authErr;
 
     const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user.id);
     if (profErr) throw profErr;
@@ -414,6 +425,23 @@ export async function updateUserProfileAction(fullName: string, whatsappNumber: 
     return { success: true };
   } catch (err: any) {
     console.error("[Action] Failed to update user profile:", err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function wipeUserAccountAction() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Unauthorized");
+
+    await supabase.from('tracked_products').delete().eq('user_id', user.id);
+    await supabase.from('sellers').delete().eq('id', user.id);
+    await supabase.from('user_profiles').delete().eq('id', user.id);
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("[Action] Failed to wipe user account:", err);
     return { success: false, error: err.message };
   }
 }

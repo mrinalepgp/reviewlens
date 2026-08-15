@@ -3,7 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction, updateUserProfileAction } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -727,173 +727,365 @@ function ExecutiveIntelligenceConsoleModal({
   );
 }
 
-function SettingsModal({ 
+function SettingsManagerModal({ 
   isOpen, 
   onClose, 
   userState, 
-  onUpdate 
+  onUpdate,
+  historicalData,
+  onAccountWiped
 }: { 
   isOpen: boolean, 
   onClose: () => void, 
   userState: any, 
-  onUpdate: (updates: any) => void 
+  onUpdate: (updates: any) => void,
+  historicalData: any[],
+  onAccountWiped: () => void
 }) {
+  const [activeTab, setActiveTab] = useState<'Profile' | 'Security' | 'Billing' | 'Danger'>('Profile');
+
+  // Profile Tab State
   const [fullName, setFullName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [whatsappAlerts, setWhatsappAlerts] = useState(false);
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
+
+  // Security Tab State
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSecuritySaving, setIsSecuritySaving] = useState(false);
+  
+  // Danger Tab State
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState(0);
+
   const [toast, setToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
     if (isOpen && userState) {
       setFullName(userState.full_name || '');
       setWhatsapp(userState.whatsapp_number || '');
+      setCompanyName(userState.company_name || '');
+      setWhatsappAlerts(userState.whatsapp_alerts_enabled || false);
     }
   }, [isOpen, userState]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setToast(null);
-    const res = await updateUserProfileAction(fullName, whatsapp, password || undefined);
-    setIsLoading(false);
-    if (res.success) {
-      setToast({ msg: 'Profile updated successfully', type: 'success' });
-      onUpdate({ full_name: fullName, whatsapp_number: whatsapp });
-      setPassword('');
-      setTimeout(() => { setToast(null); onClose(); }, 2000);
-    } else {
-      setToast({ msg: res.error || 'Failed to update', type: 'error' });
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-5 border-b border-white/10">
-          <h2 className="text-lg font-bold text-white">Account Settings</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4">
-          {toast && (
-            <div className={`p-3 rounded-lg text-sm font-medium ${toast.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
-              {toast.msg}
-            </div>
-          )}
-          
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-neutral-300">Full Name</label>
-            <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-          </div>
-          
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-neutral-300">WhatsApp Number</label>
-            <input type="text" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-          </div>
-
-          <div className="flex flex-col gap-1.5 mt-2">
-            <label className="text-sm font-medium text-neutral-300">Change Password (Optional)</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Leave blank to keep current" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 transition-colors placeholder:text-neutral-600" />
-          </div>
-
-          <div className="mt-4 flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-neutral-400 hover:text-white transition-colors">Cancel</button>
-            <button type="submit" disabled={isLoading} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50">
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function BillingModal({ isOpen, onClose, userState }: { isOpen: boolean, onClose: () => void, userState: any }) {
-  const [toast, setToast] = useState<string | null>(null);
-
-  if (!isOpen) return null;
-
-  const handleUpgradeClick = () => {
-    setToast("Stripe Checkout simulation: Contacting Sales...");
+  const showToast = (msg: string, type: 'success' | 'error') => {
+    setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
 
-  const maxCredits = 50;
-  const creditsUsed = Math.max(0, maxCredits - (userState?.credits ?? 0));
-  const progressPercent = Math.min(100, Math.round((creditsUsed / maxCredits) * 100));
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProfileSaving(true);
+    const res = await updateUserProfileAction(fullName, whatsapp, companyName, whatsappAlerts);
+    setIsProfileSaving(false);
+    if (res.success) {
+      showToast('Profile updated successfully', 'success');
+      onUpdate({ full_name: fullName, whatsapp_number: whatsapp, company_name: companyName, whatsapp_alerts_enabled: whatsappAlerts });
+    } else {
+      showToast(res.error || 'Failed to update', 'error');
+    }
+  };
+
+  const calculateStrength = (pass: string) => {
+    if (pass.length === 0) return { score: 0, text: '', color: 'bg-neutral-800' };
+    if (pass.length < 6) return { score: 1, text: 'Weak', color: 'bg-rose-500' };
+    if (pass.length >= 8 && /[A-Z]/.test(pass) && /[0-9]/.test(pass) && /[^A-Za-z0-9]/.test(pass)) return { score: 3, text: 'Strong', color: 'bg-emerald-500' };
+    return { score: 2, text: 'Medium', color: 'bg-amber-500' };
+  };
+
+  const handleSecuritySave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) {
+      showToast("Passwords do not match", "error");
+      return;
+    }
+    if (password.length < 6) {
+      showToast("Password too short", "error");
+      return;
+    }
+    setIsSecuritySaving(true);
+    const res = await updateUserProfileAction(fullName, whatsapp, companyName, whatsappAlerts, password);
+    setIsSecuritySaving(false);
+    if (res.success) {
+      showToast('Password updated successfully', 'success');
+      setPassword('');
+      setConfirmPassword('');
+    } else {
+      showToast(res.error || 'Failed to update password', 'error');
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (historicalData.length === 0) {
+      showToast("No historical data to export", "error");
+      return;
+    }
+    const headers = ["ID", "URL", "Platform", "Product Name", "Average Rating", "Risk Assessment"];
+    const rows = historicalData.map(d => [
+      d.id || '',
+      d.url || '',
+      d.platform || '',
+      `"${(d.title || '').replace(/"/g, '""')}"`,
+      d.averageScore || '',
+      d.riskAssessment || ''
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "intelligence_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmStep === 0) {
+      setDeleteConfirmStep(1);
+      return;
+    }
+    setIsDeleting(true);
+    const res = await wipeUserAccountAction();
+    if (res.success) {
+      onAccountWiped();
+    } else {
+      setIsDeleting(false);
+      showToast(res.error || 'Failed to delete account', 'error');
+    }
+  };
+
+  // Profile Tab UI
+  const renderProfile = () => (
+    <form onSubmit={handleProfileSave} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-neutral-300">Email Address</label>
+        <div className="relative">
+          <input type="text" value={userState?.email || ''} readOnly className="w-full bg-black/40 border border-white/5 rounded-lg pl-10 pr-4 py-2.5 text-neutral-500 cursor-not-allowed" />
+          <svg className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-neutral-300">Full Name</label>
+        <input type="text" value={fullName} onChange={e => setFullName(e.target.value)} required className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-neutral-300">Company / Brand Name</label>
+        <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="e.g. ReviewLens Store" className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-neutral-300">Verified WhatsApp Number</label>
+        <input type="text" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+      </div>
+      <div className="flex items-center gap-3 mt-2 bg-white/5 p-4 rounded-xl border border-white/5">
+        <div className="flex-1">
+          <p className="text-sm font-bold text-white">WhatsApp Critical Alerts</p>
+          <p className="text-xs text-neutral-400 mt-0.5">Receive immediate notifications for high-risk product returns.</p>
+        </div>
+        <button type="button" onClick={() => setWhatsappAlerts(!whatsappAlerts)} className={`w-11 h-6 rounded-full transition-colors relative ${whatsappAlerts ? 'bg-emerald-500' : 'bg-neutral-600'}`}>
+          <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform ${whatsappAlerts ? 'translate-x-5' : ''}`}></div>
+        </button>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <button type="submit" disabled={isProfileSaving} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50">
+          {isProfileSaving ? 'Saving...' : 'Save Profile'}
+        </button>
+      </div>
+    </form>
+  );
+
+  const renderSecurity = () => {
+    const strength = calculateStrength(password);
+    const isGoogle = userState?.providers?.includes('google');
+
+    if (isGoogle) {
+      return (
+        <div className="flex flex-col gap-6">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center p-2.5">
+                <svg viewBox="0 0 48 48" className="w-full h-full"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg">Google Connected</h3>
+                <p className="text-neutral-400 text-sm">You registered via Google. Password changes are disabled.</p>
+              </div>
+            </div>
+            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase">Active SSO</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <form onSubmit={handleSecuritySave} className="flex flex-col gap-5">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-neutral-300">New Password</label>
+          <div className="relative">
+            <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={6} className="w-full bg-black/40 border border-white/10 rounded-lg pl-4 pr-10 py-2.5 text-white focus:border-indigo-500 transition-colors" />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-neutral-400 hover:text-white">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">{showPassword ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />}</svg>
+            </button>
+          </div>
+          {password.length > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex gap-1 flex-1 h-1.5">
+                <div className={`flex-1 rounded-full ${strength.score >= 1 ? strength.color : 'bg-neutral-800'}`}></div>
+                <div className={`flex-1 rounded-full ${strength.score >= 2 ? strength.color : 'bg-neutral-800'}`}></div>
+                <div className={`flex-1 rounded-full ${strength.score >= 3 ? strength.color : 'bg-neutral-800'}`}></div>
+              </div>
+              <span className={`text-xs font-bold ${strength.score === 1 ? 'text-rose-500' : strength.score === 2 ? 'text-amber-500' : 'text-emerald-500'}`}>{strength.text}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-neutral-300">Confirm New Password</label>
+          <input type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required minLength={6} className={`w-full bg-black/40 border rounded-lg px-4 py-2.5 text-white transition-colors ${confirmPassword && password !== confirmPassword ? 'border-rose-500/50 focus:border-rose-500' : 'border-white/10 focus:border-indigo-500'}`} />
+        </div>
+        <div className="mt-2 flex justify-end">
+          <button type="submit" disabled={isSecuritySaving || (password !== confirmPassword) || password.length < 6} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50">
+            {isSecuritySaving ? 'Updating...' : 'Update Password'}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderBilling = () => {
+    const maxCredits = 50;
+    const creditsUsed = Math.max(0, maxCredits - (userState?.credits ?? 0));
+    const progressPercent = Math.min(100, Math.round((creditsUsed / maxCredits) * 100));
+
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col gap-4">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Current Plan</h3>
+              <p className="text-2xl font-black text-white mt-1">{userState?.plan?.toUpperCase() || 'STARTER SELLER'} PLAN</p>
+            </div>
+            <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase">Active</span>
+          </div>
+          
+          <div className="space-y-2 mt-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-neutral-300 font-medium">SKU Audits Used</span>
+              <span className="text-white font-bold">{creditsUsed} / {maxCredits}</span>
+            </div>
+            <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+              <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
+            </div>
+            <p className="text-xs text-neutral-500 text-right">{userState?.credits ?? 0} credits remaining</p>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-lg font-bold text-white mb-4">Upgrade Your Plan</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-black/40 border border-indigo-500/30 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:border-indigo-500 transition-colors">
+              <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">POPULAR</div>
+              <div>
+                <h4 className="text-lg font-bold text-white">Pro Growth</h4>
+                <p className="text-2xl font-black text-indigo-400 mt-1">₹1,999<span className="text-sm text-neutral-500 font-medium">/mo</span></p>
+              </div>
+              <ul className="space-y-2 text-sm text-neutral-300 flex-1">
+                <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 500 SKU Audits/mo</li>
+                <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Competitor Radar</li>
+              </ul>
+              <button onClick={() => showToast("Contacting Sales for Pro Growth...", "success")} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-all mt-2">Upgrade to Pro</button>
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col gap-4 hover:border-white/30 transition-colors">
+              <div>
+                <h4 className="text-lg font-bold text-white">Enterprise D2C</h4>
+                <p className="text-2xl font-black text-white mt-1">Custom</p>
+              </div>
+              <ul className="space-y-2 text-sm text-neutral-300 flex-1">
+                <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Audits</li>
+                <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Custom API Sync</li>
+              </ul>
+              <button onClick={() => showToast("Contacting Enterprise Sales...", "success")} className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-all mt-2">Contact Sales</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderDanger = () => (
+    <div className="flex flex-col gap-8">
+      <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex items-center justify-between">
+        <div>
+          <h3 className="text-white font-bold text-lg">Export Historical Data</h3>
+          <p className="text-neutral-400 text-sm mt-1">Download a CSV of all your analyzed SKUs.</p>
+        </div>
+        <button onClick={handleExportCSV} className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10 rounded-lg text-sm font-medium transition-colors">
+          Export CSV
+        </button>
+      </div>
+
+      <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-5 flex flex-col gap-4">
+        <div>
+          <h3 className="text-rose-500 font-bold text-lg">Delete Account</h3>
+          <p className="text-rose-500/70 text-sm mt-1">Permanently erase all your historical product tracking data and log out. This cannot be undone.</p>
+        </div>
+        <div className="flex justify-end mt-2">
+          {deleteConfirmStep === 0 ? (
+            <button onClick={handleDeleteAccount} className="px-5 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-500 border border-rose-500/30 rounded-lg text-sm font-bold transition-colors">
+              Delete Account
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span className="text-rose-500 text-sm font-bold">Are you absolutely sure?</span>
+              <button onClick={() => setDeleteConfirmStep(0)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors">Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={isDeleting} className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-bold transition-all shadow-[0_0_15px_rgba(225,29,72,0.3)] disabled:opacity-50">
+                {isDeleting ? 'Wiping Data...' : 'Yes, Delete Everything'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-5 border-b border-white/10">
-          <h2 className="text-lg font-bold text-white">Billing & Usage</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors">
+    <div className="fixed inset-0 z-[100] flex justify-end bg-black/60 backdrop-blur-sm sm:p-4">
+      <div className="bg-neutral-900 border border-white/10 sm:rounded-2xl w-full max-w-4xl h-full sm:h-[calc(100vh-2rem)] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="flex justify-between items-center px-6 py-5 border-b border-white/10 shrink-0">
+          <h2 className="text-xl font-black text-white">Settings & User Management</h2>
+          <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors p-1 bg-white/5 rounded-lg">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        
-        <div className="p-6 flex flex-col gap-8 overflow-y-auto max-h-[80vh]">
-          {toast && (
-            <div className="p-3 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg text-sm font-medium text-center">
-              {toast}
-            </div>
-          )}
 
-          <div className="bg-white/5 border border-white/10 rounded-xl p-5 flex flex-col gap-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Current Plan</h3>
-                <p className="text-2xl font-black text-white mt-1">{userState?.plan?.toUpperCase() || 'HOBBY'} PLAN</p>
-              </div>
-              <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full text-xs font-bold uppercase">Active</span>
-            </div>
-            
-            <div className="space-y-2 mt-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-neutral-300 font-medium">SKU Audits Used</span>
-                <span className="text-white font-bold">{creditsUsed} / {maxCredits}</span>
-              </div>
-              <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
-              </div>
-              <p className="text-xs text-neutral-500 text-right">{userState?.credits ?? 0} credits remaining</p>
-            </div>
+        <div className="flex flex-1 overflow-hidden flex-col md:flex-row">
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-white/10 shrink-0 flex flex-row md:flex-col p-4 gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar">
+            {(['Profile', 'Security', 'Billing', 'Danger'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2.5 text-sm font-bold rounded-lg text-left whitespace-nowrap transition-colors ${activeTab === tab ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' : 'text-neutral-400 hover:bg-white/5 hover:text-neutral-200 border border-transparent'}`}>
+                {tab === 'Profile' && '👤 Profile & Company'}
+                {tab === 'Security' && '🔒 Security & Credentials'}
+                {tab === 'Billing' && '💳 Billing & Plan Quota'}
+                {tab === 'Danger' && '⚠️ Danger Zone'}
+              </button>
+            ))}
           </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-white mb-4">Upgrade Your Plan</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-black/40 border border-indigo-500/30 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:border-indigo-500 transition-colors">
-                <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-2 py-1 rounded-bl-lg">POPULAR</div>
-                <div>
-                  <h4 className="text-lg font-bold text-white">Pro Seller</h4>
-                  <p className="text-2xl font-black text-indigo-400 mt-1">₹1,999<span className="text-sm text-neutral-500 font-medium">/mo</span></p>
-                </div>
-                <ul className="space-y-2 text-sm text-neutral-300 flex-1">
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 500 SKU Audits/mo</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Competitor Radar</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Automated CSV Sync</li>
-                </ul>
-                <button onClick={handleUpgradeClick} className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold transition-all mt-2">Upgrade to Pro</button>
+          
+          <div className="flex-1 overflow-y-auto p-6 bg-black/20">
+            {toast && (
+              <div className={`p-4 rounded-xl text-sm font-bold mb-6 animate-in fade-in ${toast.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`}>
+                {toast.msg}
               </div>
-
-              <div className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col gap-4 hover:border-white/30 transition-colors">
-                <div>
-                  <h4 className="text-lg font-bold text-white">Enterprise / D2C</h4>
-                  <p className="text-2xl font-black text-white mt-1">Custom</p>
-                </div>
-                <ul className="space-y-2 text-sm text-neutral-300 flex-1">
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Audits</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Dedicated Account Manager</li>
-                  <li className="flex items-center gap-2"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> API Access</li>
-                </ul>
-                <button onClick={handleUpgradeClick} className="w-full py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-all mt-2">Contact Sales</button>
-              </div>
-            </div>
+            )}
+            
+            {activeTab === 'Profile' && renderProfile()}
+            {activeTab === 'Security' && renderSecurity()}
+            {activeTab === 'Billing' && renderBilling()}
+            {activeTab === 'Danger' && renderDanger()}
           </div>
         </div>
       </div>
@@ -944,7 +1136,6 @@ export default function Dashboard() {
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isBillingModalOpen, setIsBillingModalOpen] = useState(false);
   const [userState, setUserState] = useState<any>(null);
 
   useEffect(() => {
@@ -1056,7 +1247,7 @@ export default function Dashboard() {
               ⚡ Load Demo Data
             </button>
             
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsBillingModalOpen(true)}>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
               <span className="text-xs font-bold text-amber-400">⚡ {userState?.credits ?? 0}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
@@ -1078,8 +1269,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="py-1">
-                    <button onClick={() => { setIsSettingsModalOpen(true); setIsUserDropdownOpen(false); }} className="w-full text-left block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Account Settings</button>
-                    <button onClick={() => { setIsBillingModalOpen(true); setIsUserDropdownOpen(false); }} className="w-full text-left block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Billing & Usage</button>
+                    <button onClick={() => { setIsSettingsModalOpen(true); setIsUserDropdownOpen(false); }} className="w-full text-left block px-4 py-2 text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition-colors">Settings & Billing</button>
                   </div>
                   <div className="border-t border-white/10 pt-1 mt-1">
                     <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-rose-400 hover:bg-white/5 transition-colors">
@@ -1137,17 +1327,13 @@ export default function Dashboard() {
         />
       )}
 
-      <SettingsModal 
+      <SettingsManagerModal 
         isOpen={isSettingsModalOpen} 
         onClose={() => setIsSettingsModalOpen(false)} 
         userState={userState}
+        historicalData={historicalData}
         onUpdate={(updates) => setUserState((prev: any) => ({ ...prev, ...updates }))}
-      />
-
-      <BillingModal
-        isOpen={isBillingModalOpen}
-        onClose={() => setIsBillingModalOpen(false)}
-        userState={userState}
+        onAccountWiped={handleSignOut}
       />
     </div>
   );
