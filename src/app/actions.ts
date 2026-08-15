@@ -160,7 +160,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         const { data: productData, error: productError } = await supabase
           .from('tracked_products')
           .insert({
-            seller_id: user.id, // Using the real authenticated user UUID
+            user_id: user.id, // Using the real authenticated user UUID
             platform: scrapeResult.marketplace,
             product_url: url,
             product_name: productName,
@@ -312,7 +312,7 @@ export async function fetchDashboardStateAction() {
     const { data: products } = await supabase
       .from('tracked_products')
       .select('*')
-      .eq('seller_id', user.id)
+      .eq('user_id', user.id)
       .order('id', { ascending: false });
 
     // Format historical data
@@ -353,7 +353,7 @@ export async function deleteProductAction(productId: string) {
       .from('tracked_products')
       .delete()
       .eq('id', productId)
-      .eq('seller_id', user.id);
+      .eq('user_id', user.id);
 
     if (error) throw error;
     return { success: true };
@@ -372,7 +372,7 @@ export async function clearAllHistoryAction() {
     const { error } = await supabase
       .from('tracked_products')
       .delete()
-      .eq('seller_id', user.id);
+      .eq('user_id', user.id);
 
     if (error) throw error;
     return { success: true };

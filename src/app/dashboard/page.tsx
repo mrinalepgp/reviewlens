@@ -279,8 +279,7 @@ function RiskRadar({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <h3 className="text-sm font-bold text-neutral-300">No products monitored yet</h3>
-            <p className="text-xs text-neutral-500 max-w-xs">Enter a Meesho or Flipkart URL to run your first AI audit.</p>
+            <p className="text-sm text-neutral-500 font-medium">Awaiting input URLs to begin analysis...</p>
           </div>
         ) : (
           results.map((alert, idx) => (
@@ -777,7 +776,8 @@ export default function Dashboard() {
       if (res.success) {
         setUserState(res.user);
         setHistoricalData(res.historicalData || []);
-        setResults(res.historicalData || []);
+        // Do NOT populate Risk Radar with historical data on mount
+        // setResults(res.historicalData || []);
       } else {
         setError(res.error || "Failed to load dashboard state.");
       }
