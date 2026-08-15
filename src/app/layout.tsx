@@ -14,7 +14,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "ReviewLens | AI Return Prevention & Margin Intelligence",
-  description: "Instantly analyze Flipkart & Meesho reviews, isolate root-cause defects, and stop margin bleed with automated supplier playbooks.",
+  description: "Stop e-commerce return bleed with AI intelligence. Pinpoint root-cause defects on Flipkart & Meesho and recover margins with automated supplier playbooks.",
+  icons: {
+    icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "ReviewLens | AI Return Prevention & Margin Intelligence",
+    description: "Analyze Flipkart & Meesho reviews, isolate product defects, and generate automated supplier playbooks.",
+    type: "website",
+  }
 };
 
 export default function RootLayout({
@@ -25,7 +33,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
