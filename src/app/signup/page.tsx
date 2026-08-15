@@ -14,6 +14,8 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [passwordError, setPasswordError] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('')
   const [state, formAction, isPending] = useActionState(async (prevState: any, formData: FormData) => {
     const res = await signup(formData)
     return res || { error: '' }
@@ -30,6 +32,21 @@ export default function SignupPage() {
     }
     setPasswordError('')
   }
+
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return { score: 0, text: '', color: 'bg-transparent', textColor: 'text-transparent' }
+    if (pass.length < 6) return { score: 1, text: 'Weak', color: 'bg-rose-500', textColor: 'text-rose-400' }
+    
+    const hasMixed = /[a-zA-Z]/.test(pass) && /[0-9]/.test(pass)
+    const isStrong = pass.length >= 8 && /[A-Z]/.test(pass) && /[a-z]/.test(pass) && /[0-9]/.test(pass) && /[^A-Za-z0-9]/.test(pass)
+
+    if (isStrong) return { score: 3, text: 'Strong', color: 'bg-emerald-500', textColor: 'text-emerald-400' }
+    if (hasMixed && pass.length >= 6) return { score: 2, text: 'Medium', color: 'bg-amber-500', textColor: 'text-amber-400' }
+    
+    return { score: 1, text: 'Weak', color: 'bg-rose-500', textColor: 'text-rose-400' }
+  }
+
+  const strength = getPasswordStrength(passwordInput)
 
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col justify-center py-12 sm:px-6 lg:px-8 selection:bg-indigo-500/30">
@@ -75,7 +92,7 @@ export default function SignupPage() {
                   type="text"
                   required
                   className="appearance-none block w-full px-3 py-2.5 border border-white/10 rounded-xl bg-black/40 shadow-sm placeholder-neutral-500 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="Rahul Sharma"
+                  placeholder="e.g. Alexander Pierce"
                 />
               </div>
             </div>
@@ -93,7 +110,7 @@ export default function SignupPage() {
                   pattern="^\+?[0-9\s\-]{10,15}$"
                   title="Please enter a valid phone number (10-15 digits, optional + prefix)"
                   className="appearance-none block w-full px-3 py-2.5 border border-white/10 rounded-xl bg-black/40 shadow-sm placeholder-neutral-500 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="+91 9876543210"
+                  placeholder="+91 98765 43210"
                 />
               </div>
             </div>
@@ -110,7 +127,7 @@ export default function SignupPage() {
                   autoComplete="email"
                   required
                   className="appearance-none block w-full px-3 py-2.5 border border-white/10 rounded-xl bg-black/40 shadow-sm placeholder-neutral-500 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="merchant@example.com"
+                  placeholder="name@company.com"
                 />
               </div>
             </div>
@@ -128,8 +145,10 @@ export default function SignupPage() {
                   required
                   minLength={8}
                   title="Password must be at least 8 characters long"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
                   className="appearance-none block w-full px-3 py-2.5 pr-10 border border-white/10 rounded-xl bg-black/40 shadow-sm placeholder-neutral-500 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="••••••••"
+                  placeholder="Create a strong password"
                 />
                 <button
                   type="button"
@@ -148,6 +167,16 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
+              {passwordInput && (
+                <div className="mt-2 flex items-center justify-between px-1">
+                  <div className="flex gap-1 w-full max-w-[60%]">
+                    <div className={`h-1 w-full rounded-full transition-colors ${strength.score >= 1 ? strength.color : 'bg-white/10'}`} />
+                    <div className={`h-1 w-full rounded-full transition-colors ${strength.score >= 2 ? strength.color : 'bg-white/10'}`} />
+                    <div className={`h-1 w-full rounded-full transition-colors ${strength.score >= 3 ? strength.color : 'bg-white/10'}`} />
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold tracking-wider ${strength.textColor}`}>{strength.text}</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -161,8 +190,10 @@ export default function SignupPage() {
                   type={showConfirmPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
+                  value={confirmPasswordInput}
+                  onChange={(e) => setConfirmPasswordInput(e.target.value)}
                   className="appearance-none block w-full px-3 py-2.5 pr-10 border border-white/10 rounded-xl bg-black/40 shadow-sm placeholder-neutral-500 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all"
-                  placeholder="••••••••"
+                  placeholder="Confirm your password"
                 />
                 <button
                   type="button"
@@ -181,6 +212,25 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
+              {confirmPasswordInput.length > 0 && (
+                <div className={`mt-2 px-1 text-xs flex items-center gap-1.5 font-medium ${passwordInput === confirmPasswordInput ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {passwordInput === confirmPasswordInput ? (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Passwords match
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Passwords do not match
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="text-xs text-neutral-400 mt-4 mb-4 text-center">
