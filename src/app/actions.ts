@@ -187,7 +187,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       try {
         let insertedId: string | undefined = undefined;
 
-        // Primary persistence into 'analyses' table under user_id
+        // 1. Explicitly await insert into 'analyses' table in Supabase bound to user.id
         try {
           const { data: analysisRecord, error: analysisError } = await supabase
             .from('analyses')
@@ -203,17 +203,17 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             .select('id')
             .single();
 
-          if (analysisRecord?.id) {
+          if (analysisError) {
+            console.error("[Database] Error inserting analysis record into 'analyses' table:", analysisError.message);
+          } else if (analysisRecord?.id) {
             insertedId = analysisRecord.id;
-            console.log(`[Database] Committed analysis record to 'analyses' table: ${analysisRecord.id}`);
-          } else if (analysisError) {
-            console.warn(`[Database] Insert into 'analyses' table warning: ${analysisError.message}`);
+            console.log(`[Database] Successfully committed analysis record to 'analyses' table: ${analysisRecord.id}`);
           }
         } catch (e) {
-          console.warn("[Database] Exception during 'analyses' table insert:", e);
+          console.error("[Database] Exception during 'analyses' table insert:", e);
         }
 
-        // Secondary persistence into 'tracked_products' table
+        // 2. Secondary persistence into 'tracked_products' table
         try {
           const { data: productData, error: productError } = await supabase
             .from('tracked_products')
@@ -236,11 +236,9 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
               ...r
             }));
             await supabase.from('review_analysis').insert(reviewsToInsert);
-          } else if (productError) {
-            console.warn("[Database] Insert into 'tracked_products' table warning:", productError.message);
           }
         } catch (e) {
-          console.warn("[Database] Exception during 'tracked_products' table insert:", e);
+          // ignore secondary insert exception
         }
 
         dbProductId = insertedId || `analysis_${Date.now()}`;
@@ -380,38 +378,47 @@ export async function fetchDashboardStateAction() {
       .eq('id', user.id)
       .maybeSingle();
 
-    // Get historical data
-    let { data: products } = await supabase
-      .from('tracked_products')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('id', { ascending: false });
+    // Query 'analyses' table for current user_id
+    let fetchedProducts: any[] = [];
+    try {
+      const { data: analysesData, error: analysesError } = await supabase
+        .from('analyses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('id', { ascending: false });
 
-    if (!products || products.length === 0) {
+      if (!analysesError && analysesData && analysesData.length > 0) {
+        fetchedProducts = analysesData;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (fetchedProducts.length === 0) {
       try {
-        const { data: altProducts } = await supabase
-          .from('analyses')
+        const { data: trackedData } = await supabase
+          .from('tracked_products')
           .select('*')
           .eq('user_id', user.id)
           .order('id', { ascending: false });
-        if (altProducts && altProducts.length > 0) {
-          products = altProducts;
+        if (trackedData && trackedData.length > 0) {
+          fetchedProducts = trackedData;
         }
       } catch {
-        // ignore if analyses table does not exist
+        // ignore
       }
     }
 
     // Format historical data
-    const historicalData: AnalyzedProductSummary[] = (products || []).map((p: any) => ({
+    const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: any) => ({
       id: p.id,
-      url: p.product_url,
+      url: p.product_url || p.url,
       platform: p.platform,
-      title: p.product_name,
-      averageScore: p.average_rating,
-      riskAssessment: p.risk_status,
+      title: p.product_name || p.title,
+      averageScore: p.average_rating || p.averageScore || 4.0,
+      riskAssessment: p.risk_status || p.riskAssessment || 'safe',
       negativeThemes: p.intelligence_data?.executiveScorecard?.primaryRiskDriver ? [p.intelligence_data.executiveScorecard.primaryRiskDriver] : [],
-      intelligence: p.intelligence_data
+      intelligence: p.intelligence_data || p.intelligence
     }));
 
     return {

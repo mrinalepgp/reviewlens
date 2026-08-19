@@ -1120,12 +1120,16 @@ export default function Dashboard() {
       if (response.success) {
         setActiveStep(3);
         const updatedSummaries = response.summaries;
-        setAnalyses((prev) => [...updatedSummaries, ...prev]);
+        setAnalyses((prev) => {
+          const existingIds = new Set(prev.map(p => p.id || p.title));
+          const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
+          return [...newItems, ...prev];
+        });
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
-        // Background sync to pull latest state from database
+        // Background sync to pull latest state from database safely
         fetchDashboardStateAction().then(res => {
-          if (res.success && res.historicalData) {
+          if (res.success && res.historicalData && res.historicalData.length > 0) {
             setAnalyses(res.historicalData);
           }
         });
