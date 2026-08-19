@@ -17,6 +17,7 @@ export interface ReviewPayload {
 }
 
 export interface EnterpriseIntelligence {
+  category?: string;
   reviews?: any[];
   raw_reviews?: any[];
   executiveScorecard?: any;
