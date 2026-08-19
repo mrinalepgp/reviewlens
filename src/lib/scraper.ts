@@ -225,24 +225,24 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       let html = "";
 
       let proxyUrl = "";
-      if (dogKey || proxyKey) {
-        if (provider === 'scraperapi') {
-          proxyUrl = `http://api.scraperapi.com?api_key=${proxyKey}&url=${encodeURIComponent(pageUrl)}&premium=true`;
-        } else if (provider === 'zenrows') {
-          proxyUrl = `https://api.zenrows.com/v1/?apikey=${proxyKey}&url=${encodeURIComponent(pageUrl)}&premium_proxy=true&wait=0`;
-        } else {
-          proxyUrl = `https://api.scrapingdog.com/scrape?api_key=${dogKey || proxyKey}&url=${encodeURIComponent(pageUrl)}&dynamic=false`;
-        }
+      const scrapeDoKey = process.env.SCRAPEDO_API_KEY || process.env.SCRAPINGDOG_API_KEY || process.env.PROXY_API_KEY;
+      
+      if (scrapeDoKey) {
+        // Scrape.do API Endpoint with render=true for full Javascript execution & DOM rendering
+        proxyUrl = `https://api.scrape.do/?token=${scrapeDoKey}&url=${encodeURIComponent(pageUrl)}&render=true`;
       }
 
       if (proxyUrl) {
         try {
-          const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+          console.log(`[Worker Pool] Executing Scrape.do API fetch (render=true) for page ${page}`);
+          const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(15000) });
           if (response.ok) {
             html = await response.text();
+          } else {
+            console.warn(`[Worker Pool] Scrape.do status ${response.status} for page ${page}. Falling back to direct/Jina...`);
           }
-        } catch {
-          // ignore proxy timeout
+        } catch (err: any) {
+          console.warn(`[Worker Pool] Scrape.do request exception for page ${page}:`, err.message);
         }
       }
 
@@ -300,18 +300,18 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       const $ = cheerio.load(html || "<html></html>");
-      let pTitle = $('span.VU-ZEz, span.B_NuCI, h1').first().text().trim() || $('title').text().trim();
+      let pTitle = $('span.VU-ZEz, span.B_NuCI, h1._6ERy96, h1.ProductTitle, h1').first().text().trim() || $('title').text().trim();
       const extractedReviews: ReviewPayload[] = [];
 
-      $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText').each((idx, el) => {
+      $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText, div.ReviewContainer, div[class*="review"]').each((idx, el) => {
         const text = $(el).text().replace(/\s+/g, ' ').trim();
-        const ratingText = $(el).find('div._3LWZlK, div.XJA2L8').text().trim();
-        const parsedRating = Number(ratingText) || (text.toLowerCase().includes('bad') || text.toLowerCase().includes('defect') || text.toLowerCase().includes('scratch') ? 1 : 4);
-        if (text.length > 10) {
+        const ratingText = $(el).find('div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').text().trim();
+        const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || (text.toLowerCase().includes('bad') || text.toLowerCase().includes('defect') || text.toLowerCase().includes('scratch') || text.toLowerCase().includes('loose') ? 1 : 4);
+        if (text.length > 15) {
           extractedReviews.push({
             id: `rev_${page}_${idx}`,
             marketplace,
-            rating: parsedRating,
+            rating: Math.min(5, Math.max(1, parsedRating)),
             content: text,
             author: 'Verified Buyer',
             date: new Date(Date.now() - idx * 43200000).toISOString()
