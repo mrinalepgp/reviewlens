@@ -42,24 +42,51 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       throw new Error("Unauthorized. Please log in to run analyses.");
     }
 
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile } = await supabase
       .from('user_profiles')
       .select('credits')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (profileError || !profile) {
-      throw new Error("Unable to fetch user profile or credits.");
+    if (!profile) {
+      console.log(`[Auto-Provision] User profile missing for ${user.id}. Auto-provisioning profile with 50 credits...`);
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User';
+      
+      const { data: newProfile } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: user.id,
+          credits: 50,
+          full_name: fullName
+        })
+        .select('credits')
+        .maybeSingle();
+
+      profile = newProfile || { credits: 50 };
+
+      // Ensure seller record also exists
+      try {
+        await supabase.from('sellers').insert({
+          id: user.id,
+          full_name: fullName,
+          whatsapp_number: '',
+          subscription_status: 'free'
+        });
+      } catch {
+        // ignore if already exists
+      }
     }
 
-    if (profile.credits < urls.length) {
-      throw new Error(`Insufficient credits. You need ${urls.length} credits but have ${profile.credits}.`);
+    const availableCredits = profile?.credits ?? 50;
+
+    if (availableCredits < urls.length) {
+      throw new Error(`Insufficient credits. You need ${urls.length} credits but have ${availableCredits}.`);
     }
 
     console.log(`[Action] Starting batch analysis for ${urls.length} URLs...`);
     const summaries: AnalyzedProductSummary[] = [];
 
-    let currentCredits = profile.credits;
+    let currentCredits = availableCredits;
 
     for (const url of urls) {
       const scrapeResult = await fetchMarketplaceReviews(url);
@@ -302,18 +329,29 @@ export async function fetchDashboardStateAction() {
     if (!user) throw new Error("Unauthorized");
 
     // Get Profile
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
+
+    if (!profile) {
+      console.log(`[Auto-Provision] Dashboard state fetch: missing profile for ${user.id}. Creating default profile...`);
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User';
+      const { data: newProf } = await supabase
+        .from('user_profiles')
+        .insert({ id: user.id, credits: 50, full_name: fullName })
+        .select('*')
+        .maybeSingle();
+      profile = newProf || { id: user.id, credits: 50, full_name: fullName, plan_tier: 'Hobby' };
+    }
 
     // Get Seller (for whatsapp)
-    const { data: seller } = await supabase
+    let { data: seller } = await supabase
       .from('sellers')
       .select('whatsapp_number')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     // Get historical data
     const { data: products } = await supabase

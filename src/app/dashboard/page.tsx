@@ -225,6 +225,84 @@ function IngestionCard({
   );
 }
 
+function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
+  const steps = [
+    { num: 1, label: '[1/4] Scraping verified buyer reviews...' },
+    { num: 2, label: '[2/4] Translating regional & vernacular feedback...' },
+    { num: 3, label: '[3/4] Running Gemini AI defect cluster engine...' },
+    { num: 4, label: '[4/4] Calculating return margin impact...' }
+  ];
+
+  const currentProgress = Math.min(100, Math.max(15, (activeStep / 4) * 100));
+
+  return (
+    <div className="flex flex-col gap-4 p-5 rounded-2xl bg-black/60 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.15)] animate-in fade-in duration-300">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+            <svg className="animate-spin h-4 w-4 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white tracking-wide uppercase">AI Pipeline Processing</h4>
+            <p className="text-xs text-indigo-300/80 font-mono mt-0.5">Live Gemini & Scraping Execution</p>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+          Step {Math.min(activeStep, 4)} of 4
+        </span>
+      </div>
+
+      <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
+        <div 
+          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-700 ease-out rounded-full"
+          style={{ width: `${currentProgress}%` }}
+        ></div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2.5 mt-1">
+        {steps.map(s => {
+          const isDone = activeStep > s.num;
+          const isActive = activeStep === s.num;
+          return (
+            <div 
+              key={s.num} 
+              className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                isActive 
+                  ? 'bg-indigo-500/10 border-indigo-500/40 text-white shadow-[0_0_12px_rgba(99,102,241,0.1)]' 
+                  : isDone 
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' 
+                  : 'bg-black/20 border-white/5 text-neutral-500'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {isDone ? (
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xs font-bold text-emerald-400">✓</span>
+                ) : isActive ? (
+                  <span className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
+                  </span>
+                ) : (
+                  <span className="w-5 h-5 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center text-[10px] font-bold text-neutral-500">{s.num}</span>
+                )}
+                <span className="text-xs font-medium font-mono">{s.label}</span>
+              </div>
+              {isActive && (
+                <span className="text-[10px] uppercase font-bold text-indigo-400 animate-pulse bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">Processing...</span>
+              )}
+              {isDone && (
+                <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Complete</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function RiskBadge({ status }: { status: HealthStatus }) {
   switch (status) {
     case 'critical':
@@ -239,10 +317,12 @@ function RiskBadge({ status }: { status: HealthStatus }) {
 function RiskRadar({ 
   results, 
   isLoading,
+  activeStep,
   onSelectProduct 
 }: { 
   results: AnalyzedProductSummary[],
   isLoading: boolean,
+  activeStep: number,
   onSelectProduct: (product: AnalyzedProductSummary) => void 
 }) {
   return (
@@ -262,17 +342,7 @@ function RiskRadar({
 
       <div className="flex flex-col gap-3">
         {isLoading ? (
-          <div className="flex flex-col gap-3 animate-pulse">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex p-4 rounded-xl bg-black/40 border border-white/5 h-24 items-center">
-                <div className="w-12 h-6 bg-white/10 rounded mr-4"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-white/10 rounded w-3/4"></div>
-                  <div className="h-4 bg-white/10 rounded w-1/2"></div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <MultiStepPipelineLoader activeStep={activeStep} />
         ) : results.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-dashed border-white/10 text-center gap-3">
             <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
@@ -306,7 +376,7 @@ function RiskRadar({
                 <div className="bg-white/5 border border-white/10 rounded-lg p-3 relative">
                   <span className="absolute -top-2 left-3 bg-neutral-900 px-1 text-[10px] font-bold text-neutral-400 uppercase">Raw Vernacular</span>
                   <p className="text-xs text-neutral-300 italic line-clamp-2 mt-1 font-serif">
-                    "{alert.intelligence?.vernacularDecoder?.[0]?.context || alert.intelligence?.reviews?.[0]?.reviewText || 'No raw feedback available.'}"
+                    "{alert.intelligence?.vernacularDecoder?.[0]?.context || alert.intelligence?.vernacularDecoder?.[0]?.rawVernacularText || alert.intelligence?.reviews?.[0]?.comment || alert.intelligence?.reviews?.[0]?.reviewText || 'No raw feedback available.'}"
                   </p>
                 </div>
                 
@@ -1160,6 +1230,7 @@ export default function Dashboard() {
   const [results, setResults] = useState<AnalyzedProductSummary[]>([]);
   const [historicalData, setHistoricalData] = useState<AnalyzedProductSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeStep, setActiveStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -1188,7 +1259,13 @@ export default function Dashboard() {
 
   const handleAnalyze = async (urls: string[]) => {
     setIsLoading(true);
+    setActiveStep(1);
     setError(null);
+
+    const stepInterval = setInterval(() => {
+      setActiveStep((prev) => (prev < 4 ? prev + 1 : prev));
+    }, 2500);
+
     try {
       const response = await Promise.race([
         analyzeUrlsAction(urls),
@@ -1198,9 +1275,10 @@ export default function Dashboard() {
       ]);
       
       if (response.success) {
+        setActiveStep(4);
         setResults((prev) => [...response.summaries, ...prev]);
         setHistoricalData((prev) => [...response.summaries, ...prev]);
-        setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, prev.credits - response.summaries.length) } : prev);
+        setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - response.summaries.length) } : prev);
       } else {
         setError("Pipeline Error: " + response.error);
       }
@@ -1211,6 +1289,7 @@ export default function Dashboard() {
         setError("A fatal error occurred during pipeline execution. " + (err.message || ''));
       }
     } finally {
+      clearInterval(stepInterval);
       setIsLoading(false);
     }
   };
@@ -1335,7 +1414,7 @@ export default function Dashboard() {
 
           {/* 3. Priority-sorted Risk Radar */}
           <div className="lg:col-span-3">
-            <RiskRadar results={results} isLoading={isLoading} onSelectProduct={setSelectedProduct} />
+            <RiskRadar results={results} isLoading={isLoading} activeStep={activeStep} onSelectProduct={setSelectedProduct} />
           </div>
         </div>
 
