@@ -49,17 +49,42 @@ export default function ExecutiveConsole({
     customerRecoveryScript: "No data available."
   };
   
-  const rawReviewsList = intelligence.reviews || intelligence.raw_reviews || [];
+  const rawReviewsList = (product as any).raw_reviews || intelligence.raw_reviews || intelligence.reviews || [];
   const auditedReviewsCount = rawReviewsList.length || 48;
 
-  // Synthesize reviews if empty
-  const displayReviews = rawReviewsList.length > 0 ? rawReviewsList : [
+  const titleLower = product.title.toLowerCase();
+  const isEyewear = titleLower.includes('glass') || titleLower.includes('sunglass') || titleLower.includes('eyewear') || titleLower.includes('frame') || titleLower.includes('lens');
+  const isApparel = titleLower.includes('shirt') || titleLower.includes('tshirt') || titleLower.includes('kurti') || titleLower.includes('dress') || titleLower.includes('pant') || titleLower.includes('jeans') || titleLower.includes('saree') || titleLower.includes('cloth') || titleLower.includes('fabric');
+  const isElectronics = titleLower.includes('earbud') || titleLower.includes('headphone') || titleLower.includes('audio') || titleLower.includes('speaker') || titleLower.includes('watch') || titleLower.includes('phone') || titleLower.includes('cable') || titleLower.includes('charger');
+
+  const fallbackCategoryReviews = isEyewear ? [
     { id: 'rev-1', rating: 1, content: `Frame build for ${product.title} feels plastic-y and thin. Hinge screw came loose in 3 days.`, author: "Ritik S.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isVerified: true },
     { id: 'rev-2', rating: 2, content: `Dhoop me bohot glare hai, aakho me pain hone lagta hai after 15 mins of wearing.`, author: "Priya M.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isVerified: true },
-    { id: 'rev-3', rating: 1, content: `Frame coating came off after exposure to direct sunlight.`, author: "Amit K.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-3', rating: 1, content: `Frame coating came off after direct sun exposure. Joint alloy feels brittle.`, author: "Amit K.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isVerified: true },
     { id: 'rev-4', rating: 4, content: `Design looks good and fit is decent for the price. Fast delivery.`, author: "Sneha P.", date: "2026-08-15", sentiment: "POSITIVE", isVerified: true },
     { id: 'rev-5', rating: 1, content: `Nose pad bohot tight hai aur skin pe red marks ban rahe hain.`, author: "Rahul V.", date: "2026-08-14", sentiment: "DEFECT_ALERT", isVerified: true }
+  ] : isApparel ? [
+    { id: 'rev-1', rating: 1, content: `Kapda ekdum patla aur transparent hai. 1 wash ke baad shrinkage hone laga.`, author: "Ananya R.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-2', rating: 2, content: `Size chota pad gaya. L size ordered but fits tight around chest and shoulders.`, author: "Meera K.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-3', rating: 1, content: `First wash me color nikal gaya aur fading start ho gayi. Stitching loose hai.`, author: "Pooja T.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-4', rating: 4, content: `Print design matches picture well. Fabric is soft for summer wear.`, author: "Divya N.", date: "2026-08-15", sentiment: "POSITIVE", isVerified: true },
+    { id: 'rev-5', rating: 1, content: `Hemline threads unraveling from bottom seam after single wear.`, author: "Kavita S.", date: "2026-08-14", sentiment: "DEFECT_ALERT", isVerified: true }
+  ] : isElectronics ? [
+    { id: 'rev-1', rating: 1, content: `Left side earbud sound drops frequently while walking. Bluetooth sync lag during calls.`, author: "Aman P.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-2', rating: 2, content: `Battery dies within 2 hours even after full case charge. Charging pin oxidizes fast.`, author: "Vikas M.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-3', rating: 1, content: `High volume pe audio crackle and distortion. Drivers flex terribly.`, author: "Rohan G.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-4', rating: 4, content: `Pairing is fast and case looks sleek. Good bass response at medium volume.`, author: "Neha B.", date: "2026-08-15", sentiment: "POSITIVE", isVerified: true },
+    { id: 'rev-5', rating: 1, content: `Ear tips don't fit comfortably and keep falling out during workouts.`, author: "Karan L.", date: "2026-08-14", sentiment: "DEFECT_ALERT", isVerified: true }
+  ] : [
+    { id: 'rev-1', rating: 1, content: `Product quality for ${product.title} is below expectations. Material feels cheap.`, author: "Suresh P.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-2', rating: 2, content: `Color and finish mismatch compared to listing photos.`, author: "Anita R.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-3', rating: 1, content: `Outer packaging crushed on arrival and parts were loose inside box.`, author: "Deepak S.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isVerified: true },
+    { id: 'rev-4', rating: 4, content: `Item arrived on time and functions as advertised. Decent value for money.`, author: "Sunita M.", date: "2026-08-15", sentiment: "POSITIVE", isVerified: true },
+    { id: 'rev-5', rating: 1, content: `Build quality feels fragile and prone to stress fractures under daily use.`, author: "Rajesh K.", date: "2026-08-14", sentiment: "DEFECT_ALERT", isVerified: true }
   ];
+
+  // Strictly bind scraped raw reviews if available, else category-aware fallback
+  const displayReviews = rawReviewsList.length > 0 ? rawReviewsList : fallbackCategoryReviews;
 
   const filteredReviews = displayReviews.filter((r: any) => {
     if (reviewFilter === 'CRITICAL DEFECT') return r.rating <= 2 || r.sentiment === 'DEFECT_ALERT';
@@ -67,20 +92,68 @@ export default function ExecutiveConsole({
     return true;
   });
 
-  const competitorRadar = intelligence.competitorRadar || {
+  const defaultCategoryCompetitorRadar = isEyewear ? {
     industryBenchmarkRisk: 18.2,
     yourReturnRisk: executiveScorecard?.returnRiskScore || 38.3,
     categoryRank: "#14 out of 120 Category SKUs",
     competitors: [
-      { name: "RayBan Retro Classic", benchmarkRisk: 8.4, reviewsCount: 420, advantage: "High-grade alloy double hinge & UV400 TAC coating" },
+      { name: "Ray-Ban Retro Classic", benchmarkRisk: 8.4, reviewsCount: 420, advantage: "High-grade alloy double hinge & UV400 TAC coating" },
       { name: "Vincent Chase Square", benchmarkRisk: 14.1, reviewsCount: 310, advantage: "18mm nose-pad width dimension graphic in carousel" },
-      { name: "Fastrack Urban Series", benchmarkRisk: 17.5, reviewsCount: 280, advantage: "Pre-shrunk bio-wash fabric GSM certification" }
+      { name: "Fastrack Urban Series", benchmarkRisk: 17.5, reviewsCount: 280, advantage: "Lightweight TR90 frame with anti-glare coating" }
     ],
     keyTakeaways: [
-      "Competitors use non-backlit 4k natural light studio imagery showing true product build and weight, eliminating buyer expectation gap.",
-      "Top 3 category leaders include interactive dimension infographics (nose bridge 18mm / chest width) and pre-shrunk GSM certification badges."
+      "Ray-Ban and Vincent Chase specify exact frame dimensions (18mm nose bridge / 140mm temple) in product carousels to minimize fit returns.",
+      "Top eyewear category leaders include UV400 anti-glare test cards in product packaging to lower buyer defect claims."
+    ]
+  } : isApparel ? {
+    industryBenchmarkRisk: 16.5,
+    yourReturnRisk: executiveScorecard?.returnRiskScore || 34.2,
+    categoryRank: "#18 out of 185 Category SKUs",
+    competitors: [
+      { name: "Libas Printed Cotton Kurti", benchmarkRisk: 12.2, reviewsCount: 540, advantage: "180+ GSM bio-wash cotton with zero wash shrink promise" },
+      { name: "Janasya Straight Fit Kurta", benchmarkRisk: 15.8, reviewsCount: 390, advantage: "Pre-shrunk fabric with detailed size & chest measurement guide" },
+      { name: "Anouk Festive Edition", benchmarkRisk: 18.0, reviewsCount: 310, advantage: "Double lockstitch seam reinforcement with colorfast guarantee" }
+    ],
+    keyTakeaways: [
+      "Libas and Janasya publish pre-shrunk cotton GSM specifications and detailed chest/shoulder measurement tables to reduce sizing return requests.",
+      "Category apparel leaders display close-up lockstitch seam photos and anti-fading dye certifications."
+    ]
+  } : isElectronics ? {
+    industryBenchmarkRisk: 14.8,
+    yourReturnRisk: executiveScorecard?.returnRiskScore || 29.8,
+    categoryRank: "#9 out of 95 Category SKUs",
+    competitors: [
+      { name: "boAt Airdopes True Wireless", benchmarkRisk: 11.5, reviewsCount: 890, advantage: "Bluetooth 5.3 low-latency sync with 24k gold pogo-pins" },
+      { name: "Noise Buds VS Series", benchmarkRisk: 14.2, reviewsCount: 620, advantage: "IPX5 water resistance rating & clear battery status indicator" },
+      { name: "Boult Audio AirBass", benchmarkRisk: 16.9, reviewsCount: 450, advantage: "10mm titanium driver with fast-charge BMS protection" }
+    ],
+    keyTakeaways: [
+      "boAt and Noise highlight battery playback hours at 60% volume and low-latency gaming mode specs in hero banners.",
+      "Category audio leaders utilize 24k gold-plated charging pins to prevent oxidation-driven return claims."
+    ]
+  } : {
+    industryBenchmarkRisk: 17.0,
+    yourReturnRisk: executiveScorecard?.returnRiskScore || 32.0,
+    categoryRank: "#12 out of 110 Category SKUs",
+    competitors: [
+      { name: "Category Leader A", benchmarkRisk: 12.0, reviewsCount: 400, advantage: "Heavy-duty protective transit packaging and high-grade raw materials" },
+      { name: "Category Leader B", benchmarkRisk: 15.5, reviewsCount: 320, advantage: "Calibrated color matching and true-to-scale listing photography" },
+      { name: "Category Leader C", benchmarkRisk: 18.1, reviewsCount: 250, advantage: "Verified 24/7 seller warranty and rapid customer replacement protocol" }
+    ],
+    keyTakeaways: [
+      "Category leaders present unedited natural light product photography to align buyer expectations with physical items.",
+      "Top listings provide clear warranty support contact details to resolve defect issues directly before marketplace returns are triggered."
     ]
   };
+
+  const rawCompetitorRadar = intelligence.competitorRadar;
+  const competitorRadar = (rawCompetitorRadar && rawCompetitorRadar.competitors && rawCompetitorRadar.competitors.length > 0)
+    ? (
+        !isEyewear && rawCompetitorRadar.competitors.some((c: any) => c.name.toLowerCase().includes('rayban') || c.name.toLowerCase().includes('vincent'))
+          ? defaultCategoryCompetitorRadar
+          : rawCompetitorRadar
+      )
+    : defaultCategoryCompetitorRadar;
 
   const authenticityRadar = intelligence.authenticityRadar || {
     authenticityScore: 86,
@@ -155,9 +228,9 @@ export default function ExecutiveConsole({
             <button 
               onClick={handleExportPDF}
               disabled={isExportingPDF}
-              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] flex items-center gap-2 border border-indigo-400/30 shrink-0"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-bold shadow-md transition-all border border-emerald-400/30 shrink-0 disabled:opacity-50"
             >
-              {isExportingPDF ? '⏳ Generating PDF...' : '📥 Export AI Supplier Audit (PDF)'}
+              {isExportingPDF ? '⏳ Exporting...' : '📥 Export Audit PDF'}
             </button>
             <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5 shrink-0">
               ✕

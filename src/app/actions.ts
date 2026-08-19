@@ -182,6 +182,9 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
           }
         },
         competitorDiscovery: scrapeResult.intelligence?.competitorDiscovery || [],
+        competitorRadar: scrapeResult.intelligence?.competitorRadar || null,
+        reviews: scrapeResult.reviews || [],
+        raw_reviews: scrapeResult.reviews || []
       };
 
       try {
