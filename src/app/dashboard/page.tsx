@@ -7,90 +7,13 @@ import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fet
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import KPICards from '@/components/KPICards';
+import RiskRadar from '@/components/RiskRadar';
 
 // --- Types ---
 type HealthStatus = 'safe' | 'warning' | 'critical';
 
 // --- Components ---
-
-function KPICards({ data }: { data: AnalyzedProductSummary[] }) {
-  const activeSkus = data.length;
-  
-  if (activeSkus === 0) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
-          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Active Monitored SKUs</span>
-          <span className="text-3xl font-black text-white">0</span>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
-          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Avg. Return Risk</span>
-          <span className="text-3xl font-black text-neutral-400">N/A</span>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
-          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Top Defect Cause</span>
-          <span className="text-lg font-bold text-neutral-500 mt-1">No products analyzed</span>
-        </div>
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-1 h-full bg-neutral-500"></div>
-          <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Capital Protected</span>
-          <span className="text-3xl font-black text-neutral-400">₹0</span>
-        </div>
-      </div>
-    );
-  }
-
-  const avgRisk = data.reduce((acc, curr) => acc + (curr.intelligence?.executiveScorecard?.returnRiskScore || 0), 0) / activeSkus;
-  
-  // Tally top defect
-  const defects = data.map(d => d.intelligence?.executiveScorecard?.primaryRiskDriver).filter(Boolean);
-  const defectCounts = defects.reduce((acc, val) => {
-    acc[val] = (acc[val] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const topDefect = Object.keys(defectCounts).sort((a, b) => defectCounts[b] - defectCounts[a])[0] || "Unknown";
-
-  // Calculate synchronized total protected capital across active SKUs
-  const protectedCapital = data.reduce((acc, curr) => {
-    const itemCap = curr.intelligence?.executiveScorecard?.estimatedCapitalProtected;
-    return acc + (typeof itemCap === 'number' ? itemCap : 134850);
-  }, 0);
-
-  const formatINR = (num: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
-  };
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
-        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Active Monitored SKUs</span>
-        <span className="text-3xl font-black text-white">{activeSkus} <span className="text-sm text-neutral-500 font-medium">Products</span></span>
-      </div>
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
-        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Avg. Return Risk</span>
-        <div className="flex items-center gap-2">
-          <span className="text-3xl font-black text-rose-400">{avgRisk.toFixed(1)}%</span>
-          {avgRisk > 50 && <span className="text-xs font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-2 py-0.5 rounded">High</span>}
-        </div>
-      </div>
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-        <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Top Defect Cause</span>
-        <span className="text-lg font-bold text-white mt-1 line-clamp-1">{topDefect}</span>
-      </div>
-      <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-5 flex flex-col gap-2 relative overflow-hidden shadow-[0_0_15px_rgba(16,185,129,0.05)]">
-        <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-        <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Capital Protected</span>
-        <span className="text-3xl font-black text-emerald-400">{formatINR(protectedCapital)}</span>
-      </div>
-    </div>
-  );
-}
 
 function IngestionCard({
   onAnalyze,
@@ -106,17 +29,16 @@ function IngestionCard({
   useEffect(() => {
     if (!isLoading) return;
     const texts = [
-      "Spawning parallel workers to extract deep review catalog...",
-      "Executing Map-Reduce vernacular sentiment parsing...",
-      "Applying recency-decay statistical weighting...",
-      "Finalizing executive risk matrix..."
+      "Phase 1: Spawning Scrape.do parallel workers to extract deep review catalog...",
+      "Phase 2: Executing Map-Reduce Gemini AI analysis...",
+      "Phase 3: Finalizing executive return risk matrix..."
     ];
     let i = 0;
     setLoadingText(texts[0]);
     const interval = setInterval(() => {
       i = (i + 1) % texts.length;
       setLoadingText(texts[i]);
-    }, 2200);
+    }, 2500);
     return () => clearInterval(interval);
   }, [isLoading]);
 
@@ -229,13 +151,12 @@ function IngestionCard({
 
 function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
   const steps = [
-    { num: 1, label: 'Spawning parallel workers to extract deep review catalog...' },
-    { num: 2, label: 'Executing Map-Reduce vernacular sentiment parsing...' },
-    { num: 3, label: 'Applying recency-decay statistical weighting...' },
-    { num: 4, label: 'Finalizing executive risk matrix...' }
+    { num: 1, label: 'Spawning Scrape.do parallel workers to extract deep review catalog...' },
+    { num: 2, label: 'Executing Map-Reduce Gemini AI analysis...' },
+    { num: 3, label: 'Finalizing executive return risk matrix...' }
   ];
 
-  const currentProgress = Math.min(100, Math.max(15, (activeStep / 4) * 100));
+  const currentProgress = Math.min(100, Math.max(25, (activeStep / 3) * 100));
 
   return (
     <div className="flex flex-col gap-4 p-5 rounded-2xl bg-black/60 border border-indigo-500/30 shadow-[0_0_30px_rgba(99,102,241,0.15)] animate-in fade-in duration-300">
@@ -249,11 +170,11 @@ function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
           </div>
           <div>
             <h4 className="text-sm font-bold text-white tracking-wide uppercase">AI Pipeline Processing</h4>
-            <p className="text-xs text-indigo-300/80 font-mono mt-0.5">Live Gemini & Scraping Execution</p>
+            <p className="text-xs text-indigo-300/80 font-mono mt-0.5">Scrape.do & Gemini 1.5 Flash</p>
           </div>
         </div>
         <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
-          Step {Math.min(activeStep, 4)} of 4
+          Phase {Math.min(activeStep, 3)} of 3
         </span>
       </div>
 
@@ -314,108 +235,6 @@ function RiskBadge({ status }: { status: HealthStatus }) {
     case 'safe':
       return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">Optimal</span>;
   }
-}
-
-function RiskRadar({ 
-  results, 
-  isLoading,
-  activeStep,
-  onSelectProduct 
-}: { 
-  results: AnalyzedProductSummary[],
-  isLoading: boolean,
-  activeStep: number,
-  onSelectProduct: (product: AnalyzedProductSummary) => void 
-}) {
-  return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-6 h-full">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Risk Radar</h2>
-          <p className="text-sm text-neutral-400 mt-1">Real-time alerts prioritized by AI sentiment urgency.</p>
-        </div>
-        <button className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg text-xs font-medium text-neutral-300 transition-colors">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Export AI Audit (PDF)
-        </button>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {isLoading ? (
-          <MultiStepPipelineLoader activeStep={activeStep} />
-        ) : results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-dashed border-white/10 text-center gap-3">
-            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <p className="text-sm text-neutral-500 font-medium">Awaiting input URLs to begin analysis...</p>
-          </div>
-        ) : (
-          results.map((alert, idx) => (
-            <div 
-              key={idx} 
-              onClick={() => onSelectProduct(alert)}
-              className="flex flex-col p-4 rounded-xl bg-black/40 border border-white/5 hover:border-white/20 transition-colors gap-3 cursor-pointer group"
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
-                  <span className="text-[10px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 uppercase">
-                    {alert.platform}
-                  </span>
-                  {alert.intelligence?.category && (
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20 uppercase">
-                      {alert.intelligence.category}
-                    </span>
-                  )}
-                  <span className="text-sm font-semibold text-neutral-200 line-clamp-1 flex-1 group-hover:text-white transition-colors">
-                    {alert.title}
-                  </span>
-                </div>
-                <RiskBadge status={alert.riskAssessment} />
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                {/* Vernacular Snippet */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3 relative">
-                  <span className="absolute -top-2 left-3 bg-neutral-900 px-1 text-[10px] font-bold text-neutral-400 uppercase">Raw Vernacular</span>
-                  <p className="text-xs text-neutral-300 italic line-clamp-2 mt-1 font-serif">
-                    "{alert.intelligence?.vernacularDecoder?.[0]?.context || alert.intelligence?.vernacularDecoder?.[0]?.rawVernacularText || alert.intelligence?.reviews?.[0]?.comment || alert.intelligence?.reviews?.[0]?.reviewText || 'No raw feedback available.'}"
-                  </p>
-                </div>
-                
-                {/* AI Translated Defect */}
-                <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-lg p-3 relative">
-                  <span className="absolute -top-2 left-3 bg-neutral-900 px-1 text-[10px] font-bold text-indigo-400 uppercase">AI Root-Cause</span>
-                  <p className="text-xs text-indigo-200 line-clamp-2 mt-1 font-medium">
-                    {alert.intelligence?.executiveScorecard?.primaryRiskDriver || 'No root cause identified.'}
-                  </p>
-                </div>
-              </div>
-
-              {((alert.intelligence?.defectTaxonomy && alert.intelligence.defectTaxonomy.length > 0) || (alert.negativeThemes && alert.negativeThemes.length > 0)) && (
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {(alert.intelligence?.defectTaxonomy || []).map((defect: any, i: number) => (
-                    <span key={i} className="text-[10px] text-rose-300 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 font-medium">
-                      ⚠️ {defect.subIssue || defect.category}
-                    </span>
-                  ))}
-                  {alert.negativeThemes?.map((theme, i) => (
-                    <span key={`theme_${i}`} className="text-[10px] text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-medium">
-                      {theme}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
 }
 
 function HistoricalTable({ 
@@ -1291,7 +1110,7 @@ export default function Dashboard() {
     setError(null);
 
     const stepInterval = setInterval(() => {
-      setActiveStep((prev) => (prev < 4 ? prev + 1 : prev));
+      setActiveStep((prev) => (prev < 3 ? prev + 1 : prev));
     }, 2500);
 
     try {
@@ -1303,10 +1122,17 @@ export default function Dashboard() {
       ]);
       
       if (response.success) {
-        setActiveStep(4);
+        setActiveStep(3);
         setResults((prev) => [...response.summaries, ...prev]);
         setHistoricalData((prev) => [...response.summaries, ...prev]);
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - response.summaries.length) } : prev);
+
+        // Instant background sync
+        fetchDashboardStateAction().then(res => {
+          if (res.success && res.historicalData) {
+            setHistoricalData(res.historicalData);
+          }
+        });
       } else {
         setError("Pipeline Error: " + response.error);
       }
@@ -1434,6 +1260,12 @@ export default function Dashboard() {
         {/* 1. KPI Metrics */}
         <KPICards data={historicalData} />
 
+        {isLoading && (
+          <div className="w-full mb-6">
+            <MultiStepPipelineLoader activeStep={activeStep} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* 2. Bulk Product Ingestion Card */}
           <div className="lg:col-span-2">
@@ -1442,7 +1274,7 @@ export default function Dashboard() {
 
           {/* 3. Priority-sorted Risk Radar */}
           <div className="lg:col-span-3">
-            <RiskRadar results={results} isLoading={isLoading} activeStep={activeStep} onSelectProduct={setSelectedProduct} />
+            <RiskRadar results={results} onSelectProduct={setSelectedProduct} />
           </div>
         </div>
 
