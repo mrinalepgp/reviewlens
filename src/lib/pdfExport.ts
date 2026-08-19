@@ -18,31 +18,42 @@ export function exportSupplierAuditPDF(product: AnalyzedProductSummary) {
   // Clean raw Rupee symbols for clean standard INR PDF rendering
   const rawMarginLossRange = (executiveScorecard.estimatedMarginLossRange || 'N/A').replace(/₹/g, 'INR ');
 
-  // 1. Header Banner Background
-  doc.setFillColor(15, 23, 42); // slate-900
+  // 1. Header Banner Background (Slate-900)
+  doc.setFillColor(15, 23, 42);
   doc.rect(0, 0, 210, 36, 'F');
 
-  // Title & Subtitle
+  // Flex Equivalent Header Row - Left Side Title & Date Subtitle
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(15);
+  doc.setFontSize(11.5);
   doc.setFont('helvetica', 'bold');
   doc.text("REVIEWLENS | EXECUTIVE SUPPLIER QUALITY AUDIT", 14, 16);
 
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(148, 163, 184); // slate-400
-  doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} | Confidential Enterprise Audit Report`, 14, 25);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-IN')} | Confidential Enterprise Audit Report`, 14, 24);
 
-  // Top Right Badge
+  // Flex Equivalent Header Row - Right Side Platform & Sample Size Badge
+  const platformName = (product.platform || 'MEESHO').toUpperCase();
+  const platformBadgeText = `${platformName} AUDIT`;
+  const sampleBadgeText = `Sample: ${auditedReviewsCount} Verified Reviews`;
+
+  const badgeWidth = 50;
+  const badgeHeight = 18;
+  const badgeX = 210 - 14 - badgeWidth; // 146mm (Right-aligned to 196mm margin)
+  const badgeY = 9;
+
   doc.setFillColor(79, 70, 229); // indigo-600
-  doc.roundedRect(135, 9, 61, 18, 3, 3, 'F');
+  doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 3, 3, 'F');
+
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${(product.platform || 'E-COMMERCE').toUpperCase()} AUDIT`, 139, 15);
+  doc.text(platformBadgeText, badgeX + 4, badgeY + 6);
+
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Sample: ${auditedReviewsCount} Verified Reviews`, 139, 21);
+  doc.text(sampleBadgeText, badgeX + 4, badgeY + 12);
 
   let y = 46;
 
