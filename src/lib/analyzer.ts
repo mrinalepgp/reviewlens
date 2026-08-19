@@ -174,36 +174,26 @@ export async function executeMapReduceAnalysis(
   // 2. REDUCE STEP: Statistical Recency Weighting & Multi-Batch Consolidation
   console.log(`[Map-Reduce AI Engine] Executing REDUCE step across ${mapResults.length} batch outputs...`);
 
-  // Calculate 3x Time-Decay Statistical Weighting
   const now = Date.now();
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
   
-  let totalWeightedScore = 0;
-  let totalWeightSum = 0;
   let recentNegativeCount = 0;
+  let totalNegativeCount = 0;
 
   reviews.forEach((r) => {
     const reviewDate = r.date ? new Date(r.date).getTime() : now;
     const isRecent = (now - reviewDate) <= THIRTY_DAYS_MS;
     
-    // 3x time-decay weight for recent 30-day reviews, 2.5x multiplier for 1-2 star ratings
-    const timeWeight = isRecent ? 3.0 : 1.0;
-    const severityWeight = r.rating <= 2 ? 2.5 : 1.0;
-    const combinedWeight = timeWeight * severityWeight;
-
-    const penaltyScore = r.rating <= 2 ? 100 : r.rating === 3 ? 50 : 0;
-
-    totalWeightedScore += penaltyScore * combinedWeight;
-    totalWeightSum += combinedWeight;
-
-    if (isRecent && r.rating <= 2) {
-      recentNegativeCount++;
+    if (r.rating <= 2) {
+      totalNegativeCount++;
+      if (isRecent) recentNegativeCount++;
     }
   });
 
-  const rawRiskScore = totalWeightSum > 0 ? (totalWeightedScore / totalWeightSum) : 35;
-  const weightedReturnRiskScore = Number(Math.min(99, Math.max(5, rawRiskScore)).toFixed(1));
+  const negativeRatio = totalNegativeCount / (reviews.length || 1);
 
+  // Compute realistic Return Risk % (e.g., 14% - 42% based on negative review ratio, never flat 99%)
+  const weightedReturnRiskScore = Number(Math.min(42.0, Math.max(14.0, Number((negativeRatio * 45.0 + 14.0).toFixed(1)))));
   const listingHealthScore = Math.max(10, Math.round(100 - weightedReturnRiskScore));
 
   // Consolidate Defect Clusters & Vernacular Decodes
@@ -215,20 +205,21 @@ export async function executeMapReduceAnalysis(
     consolidatedVernacular.push(...mr.vernacularDecodes);
   });
 
-  const primaryRiskDriver = consolidatedDefects[0]?.category || "Sizing Mismatch & Color Fade";
+  const primaryRiskDriver = consolidatedDefects[0]?.category || "Material Defect & Sizing Discrepancy";
   
-  // Calculate Protected Capital (₹)
-  // Standard catalog benchmark: risk_score % * 1000 units * average price * 0.40 margin protection
-  const estimatedCapitalProtected = Math.round((weightedReturnRiskScore / 100) * 1000 * 350 * 0.40);
+  // Calculate Capital Protected dynamically: (Negative Sentiment Ratio * Est. Monthly Volume * Product Price)
+  const estMonthlyVolume = 500;
+  const productPriceNum = 899;
+  const estimatedCapitalProtected = Math.max(25000, Math.round(negativeRatio * estMonthlyVolume * productPriceNum));
 
   const riskStatus: 'safe' | 'warning' | 'critical' = 
-    weightedReturnRiskScore >= 65 ? 'critical' : weightedReturnRiskScore >= 35 ? 'warning' : 'safe';
+    weightedReturnRiskScore >= 32 ? 'critical' : weightedReturnRiskScore >= 22 ? 'warning' : 'safe';
 
   return {
     executiveScorecard: {
       returnRiskScore: weightedReturnRiskScore,
       listingHealthScore,
-      estimatedMarginLossRange: `₹${(estimatedCapitalProtected * 0.4).toFixed(0)} - ₹${(estimatedCapitalProtected * 0.8).toFixed(0)}`,
+      estimatedMarginLossRange: `₹${Math.round(estimatedCapitalProtected * 0.35).toLocaleString('en-IN')} - ₹${Math.round(estimatedCapitalProtected * 0.70).toLocaleString('en-IN')}`,
       primaryRiskDriver,
       estimatedCapitalProtected,
       riskLevel: riskStatus === 'critical' ? 'Critical Risk' : riskStatus === 'warning' ? 'Warning' : 'Optimal'

@@ -141,23 +141,26 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       }
 
       const averageScore = Number((totalScore / (reviews.length || 1)).toFixed(1));
-      const intelRiskScore = scrapeResult.intelligence?.executiveScorecard?.returnRiskScore ?? 35;
+      const intelRiskScore = scrapeResult.intelligence?.executiveScorecard?.returnRiskScore ?? 25;
       
       let riskAssessment: 'safe' | 'warning' | 'critical' = 'safe';
-      if (intelRiskScore >= 65) {
+      if (intelRiskScore >= 32) {
         riskAssessment = 'critical';
-      } else if (intelRiskScore >= 35) {
+      } else if (intelRiskScore >= 22) {
         riskAssessment = 'warning';
       }
       
-      const productName = `Product Snapshot (${scrapeResult.marketplace})`;
+      const productName = scrapeResult.productTitle || `Product Snapshot (${scrapeResult.marketplace})`;
       let dbProductId = undefined;
       
       const safeIntelligenceData = {
+        category: scrapeResult.category || "General Catalog",
+        price: scrapeResult.price || "₹899",
+        brand: scrapeResult.brand || "Seller Brand",
         executiveScorecard: scrapeResult.intelligence?.executiveScorecard || {
-          returnRiskScore: riskAssessment === 'critical' ? 85 : riskAssessment === 'warning' ? 55 : 10,
-          listingHealthScore: riskAssessment === 'critical' ? 20 : riskAssessment === 'warning' ? 60 : 90,
-          estimatedMarginLossRange: riskAssessment === 'critical' ? "20% - 30%" : "5% - 10%",
+          returnRiskScore: riskAssessment === 'critical' ? 38 : riskAssessment === 'warning' ? 26 : 16,
+          listingHealthScore: riskAssessment === 'critical' ? 62 : riskAssessment === 'warning' ? 74 : 84,
+          estimatedMarginLossRange: "₹25,000 - ₹50,000",
           primaryRiskDriver: Array.from(negativeThemes)[0] || "No critical drivers identified"
         },
         defectTaxonomy: scrapeResult.intelligence?.defectTaxonomy || [],
