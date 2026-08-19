@@ -42,7 +42,11 @@ function IngestionCard({
     return () => clearInterval(interval);
   }, [isLoading]);
 
-  const handleStart = () => {
+  const handleStart = (e?: React.MouseEvent | React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (!inputText.trim()) return;
     const urls = inputText.split('\n').map(u => u.trim()).filter(u => u.length > 0);
     onAnalyze(urls);
@@ -78,7 +82,7 @@ function IngestionCard({
   };
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-4 h-full">
+    <form onSubmit={handleStart} className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-4 h-full">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">Smart Ingestion</h2>
@@ -88,7 +92,8 @@ function IngestionCard({
 
       <div className="flex space-x-1 bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
         <button
-          onClick={() => setTab('url')}
+          type="button"
+          onClick={(e) => { e.preventDefault(); setTab('url'); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             tab === 'url' ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'text-neutral-400 hover:text-white hover:bg-white/5'
           }`}
@@ -96,7 +101,8 @@ function IngestionCard({
           Direct URL Input
         </button>
         <button
-          onClick={() => setTab('csv')}
+          type="button"
+          onClick={(e) => { e.preventDefault(); setTab('csv'); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             tab === 'csv' ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'text-neutral-400 hover:text-white hover:bg-white/5'
           }`}
@@ -128,6 +134,7 @@ function IngestionCard({
       
       <div className="flex justify-end pt-2">
         <button 
+          type="submit"
           onClick={handleStart}
           disabled={isLoading || (tab === 'url' && !inputText.trim())}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-medium text-sm transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50 disabled:shadow-none"
@@ -145,7 +152,7 @@ function IngestionCard({
           )}
         </button>
       </div>
-    </div>
+    </form>
   );
 }
 

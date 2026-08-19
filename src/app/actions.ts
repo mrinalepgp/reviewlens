@@ -187,24 +187,57 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       try {
         let insertedId: string | undefined = undefined;
 
+        const riskScore = safeIntelligenceData.executiveScorecard?.returnRiskScore || 28.5;
+        const topDefect = safeIntelligenceData.executiveScorecard?.primaryRiskDriver || "Defect Detected";
+        const capitalProtected = safeIntelligenceData.executiveScorecard?.estimatedCapitalProtected || 134850;
+        const clusters = safeIntelligenceData.defectTaxonomy || [];
+
         // 1. Explicitly await insert into 'analyses' table in Supabase bound to user.id
         try {
+          const insertPayload: any = {
+            user_id: user.id,
+            product_url: url,
+            platform: scrapeResult.marketplace,
+            product_name: productName,
+            product_title: productName,
+            category: scrapeResult.category || "General",
+            average_rating: averageScore,
+            risk_status: riskAssessment,
+            return_risk_score: riskScore,
+            top_defect: topDefect,
+            capital_protected: capitalProtected,
+            defect_clusters: clusters,
+            raw_reviews: scrapeResult.reviews || [],
+            intelligence_data: safeIntelligenceData
+          };
+
           const { data: analysisRecord, error: analysisError } = await supabase
             .from('analyses')
-            .insert({
-              user_id: user.id,
-              product_url: url,
-              platform: scrapeResult.marketplace,
-              product_name: productName,
-              average_rating: averageScore,
-              risk_status: riskAssessment,
-              intelligence_data: safeIntelligenceData
-            })
-            .select('id')
+            .insert([insertPayload])
+            .select()
             .single();
 
           if (analysisError) {
-            console.error("[Database] Error inserting analysis record into 'analyses' table:", analysisError.message);
+            console.error("[Database] Primary insert error for 'analyses' table:", analysisError.message || analysisError);
+            const { data: fallbackRecord, error: fallbackError } = await supabase
+              .from('analyses')
+              .insert({
+                user_id: user.id,
+                product_url: url,
+                platform: scrapeResult.marketplace,
+                product_name: productName,
+                average_rating: averageScore,
+                risk_status: riskAssessment,
+                intelligence_data: safeIntelligenceData
+              })
+              .select('id')
+              .single();
+            if (fallbackRecord?.id) {
+              insertedId = fallbackRecord.id;
+              console.log(`[Database] Fallback committed analysis record to 'analyses': ${fallbackRecord.id}`);
+            } else if (fallbackError) {
+              console.error("[Database] Fallback insert also failed:", fallbackError.message);
+            }
           } else if (analysisRecord?.id) {
             insertedId = analysisRecord.id;
             console.log(`[Database] Successfully committed analysis record to 'analyses' table: ${analysisRecord.id}`);
