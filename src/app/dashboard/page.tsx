@@ -1074,8 +1074,7 @@ const MOCK_HISTORICAL_DATA: AnalyzedProductSummary[] = [
 ];
 
 export default function Dashboard() {
-  const [results, setResults] = useState<AnalyzedProductSummary[]>([]);
-  const [historicalData, setHistoricalData] = useState<AnalyzedProductSummary[]>([]);
+  const [analyses, setAnalyses] = useState<AnalyzedProductSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
@@ -1089,9 +1088,7 @@ export default function Dashboard() {
       const res = await fetchDashboardStateAction();
       if (res.success) {
         setUserState(res.user);
-        const catalog = res.historicalData || [];
-        setHistoricalData(catalog);
-        setResults(catalog);
+        setAnalyses(res.historicalData || []);
       } else {
         setError(res.error || "Failed to load dashboard state.");
       }
@@ -1100,8 +1097,7 @@ export default function Dashboard() {
   }, []);
 
   const loadDemoData = () => {
-    setResults(MOCK_HISTORICAL_DATA);
-    setHistoricalData(MOCK_HISTORICAL_DATA);
+    setAnalyses(MOCK_HISTORICAL_DATA);
   };
 
   const handleAnalyze = async (urls: string[]) => {
@@ -1124,15 +1120,13 @@ export default function Dashboard() {
       if (response.success) {
         setActiveStep(3);
         const updatedSummaries = response.summaries;
-        setHistoricalData((prev) => [...updatedSummaries, ...prev]);
-        setResults((prev) => [...updatedSummaries, ...prev]);
+        setAnalyses((prev) => [...updatedSummaries, ...prev]);
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
         // Background sync to pull latest state from database
         fetchDashboardStateAction().then(res => {
           if (res.success && res.historicalData) {
-            setHistoricalData(res.historicalData);
-            setResults(res.historicalData);
+            setAnalyses(res.historicalData);
           }
         });
       } else {
@@ -1153,8 +1147,7 @@ export default function Dashboard() {
   const handleDeleteProduct = async (id: string) => {
     const res = await deleteProductAction(id);
     if (res.success) {
-      setHistoricalData(prev => prev.filter(p => p.id !== id));
-      setResults(prev => prev.filter(p => p.id !== id));
+      setAnalyses(prev => prev.filter(p => p.id !== id));
     } else {
       setError("Failed to delete product: " + res.error);
     }
@@ -1164,8 +1157,7 @@ export default function Dashboard() {
     if (!window.confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
     const res = await clearAllHistoryAction();
     if (res.success) {
-      setHistoricalData([]);
-      setResults([]);
+      setAnalyses([]);
     } else {
       setError("Failed to clear history: " + res.error);
     }
@@ -1211,7 +1203,7 @@ export default function Dashboard() {
             </button>
             
             <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
-              <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - historicalData.length)}/50</span>
+              <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - analyses.length)}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
 
@@ -1260,7 +1252,7 @@ export default function Dashboard() {
         )}
 
         {/* 1. KPI Metrics */}
-        <KPICards data={historicalData} />
+        <KPICards data={analyses} />
 
         {isLoading && (
           <div className="w-full mb-6">
@@ -1276,13 +1268,13 @@ export default function Dashboard() {
 
           {/* 3. Priority-sorted Risk Radar */}
           <div className="lg:col-span-3">
-            <RiskRadar results={results} onSelectProduct={setSelectedProduct} />
+            <RiskRadar results={analyses} onSelectProduct={setSelectedProduct} />
           </div>
         </div>
 
         {/* 4. Historical Table */}
         <HistoricalTable 
-          data={historicalData} 
+          data={analyses} 
           onSelectProduct={setSelectedProduct} 
           onDeleteProduct={handleDeleteProduct}
           onClearAll={handleClearAll}
@@ -1300,7 +1292,7 @@ export default function Dashboard() {
         isOpen={isSettingsModalOpen} 
         onClose={() => setIsSettingsModalOpen(false)} 
         userState={userState}
-        historicalData={historicalData}
+        historicalData={analyses}
         onUpdate={(updates) => setUserState((prev: any) => ({ ...prev, ...updates }))}
         onAccountWiped={handleSignOut}
       />

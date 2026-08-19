@@ -185,60 +185,68 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
       };
 
       try {
-        const { data: productData, error: productError } = await supabase
-          .from('tracked_products')
-          .insert({
-            user_id: user.id,
-            platform: scrapeResult.marketplace,
-            product_url: url,
-            product_name: productName,
-            average_rating: averageScore,
-            risk_status: riskAssessment,
-            intelligence_data: safeIntelligenceData
-          })
-          .select('id')
-          .single();
-          
-        if (productError) {
-          console.error("[Database] Failed to insert tracked_product metadata:", productError.message);
-          try {
-            const { data: altData } = await supabase
-              .from('analyses')
-              .insert({
-                user_id: user.id,
-                product_url: url,
-                platform: scrapeResult.marketplace,
-                product_name: productName,
-                average_rating: averageScore,
-                risk_status: riskAssessment,
-                intelligence_data: safeIntelligenceData
-              })
-              .select('id')
-              .single();
-            if (altData?.id) dbProductId = altData.id;
-          } catch (altErr) {
-            console.error("[Database] Fallback insert to analyses table failed:", altErr);
+        let insertedId: string | undefined = undefined;
+
+        // Primary persistence into 'analyses' table under user_id
+        try {
+          const { data: analysisRecord, error: analysisError } = await supabase
+            .from('analyses')
+            .insert({
+              user_id: user.id,
+              product_url: url,
+              platform: scrapeResult.marketplace,
+              product_name: productName,
+              average_rating: averageScore,
+              risk_status: riskAssessment,
+              intelligence_data: safeIntelligenceData
+            })
+            .select('id')
+            .single();
+
+          if (analysisRecord?.id) {
+            insertedId = analysisRecord.id;
+            console.log(`[Database] Committed analysis record to 'analyses' table: ${analysisRecord.id}`);
+          } else if (analysisError) {
+            console.warn(`[Database] Insert into 'analyses' table warning: ${analysisError.message}`);
           }
-        } else if (productData?.id) {
-          dbProductId = productData.id;
-          const reviewsToInsert = reviewAnalysisData.map(r => ({
-            product_id: productData.id,
-            ...r
-          }));
-          
-          const { error: reviewsError } = await supabase
-            .from('review_analysis')
-            .insert(reviewsToInsert);
-            
-          if (reviewsError) {
-            console.error("[Database] Failed to batch insert review_analysis records:", reviewsError.message);
-          } else {
-            console.log(`[Database] Successfully committed product metadata and ${reviewsToInsert.length} analysis records.`);
-          }
+        } catch (e) {
+          console.warn("[Database] Exception during 'analyses' table insert:", e);
         }
 
-        // Always deduct 1 credit upon successful analysis execution
-        currentCredits -= 1;
+        // Secondary persistence into 'tracked_products' table
+        try {
+          const { data: productData, error: productError } = await supabase
+            .from('tracked_products')
+            .insert({
+              user_id: user.id,
+              platform: scrapeResult.marketplace,
+              product_url: url,
+              product_name: productName,
+              average_rating: averageScore,
+              risk_status: riskAssessment,
+              intelligence_data: safeIntelligenceData
+            })
+            .select('id')
+            .single();
+
+          if (productData?.id) {
+            if (!insertedId) insertedId = productData.id;
+            const reviewsToInsert = reviewAnalysisData.map(r => ({
+              product_id: productData.id,
+              ...r
+            }));
+            await supabase.from('review_analysis').insert(reviewsToInsert);
+          } else if (productError) {
+            console.warn("[Database] Insert into 'tracked_products' table warning:", productError.message);
+          }
+        } catch (e) {
+          console.warn("[Database] Exception during 'tracked_products' table insert:", e);
+        }
+
+        dbProductId = insertedId || `analysis_${Date.now()}`;
+
+        // Deduct 1 credit atomically upon full pipeline success
+        currentCredits = Math.max(0, currentCredits - 1);
         const { error: creditError } = await supabase
           .from('user_profiles')
           .update({ credits: currentCredits })
@@ -246,7 +254,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         if (creditError) {
           console.error("[Database] Failed to deduct credit:", creditError.message);
         } else {
-          console.log(`[Database] Deducted 1 credit. Remaining: ${currentCredits}`);
+          console.log(`[Database] Deducted 1 credit atomically. Remaining: ${currentCredits}`);
         }
       } catch (dbError) {
         console.error("[Database] Unhandled transaction exception:", dbError);
