@@ -85,12 +85,14 @@ export default function KPICards({ data }: KPICardsProps) {
         </div>
         
         {/* Confidence Score Sub-Badge */}
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            ✓ High Confidence - 150+ Verified Reviews
-          </span>
-        </div>
+        {activeSkus > 0 && (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              ✓ High Confidence - 150+ Verified Reviews
+            </span>
+          </div>
+        )}
 
         {activeTooltip === 'avgRisk' && (
           <div className="absolute z-30 bottom-full mb-2 left-4 right-4 bg-neutral-900 border border-rose-500/30 p-2.5 rounded-xl shadow-2xl text-[11px] text-neutral-300 leading-snug animate-in fade-in duration-150">

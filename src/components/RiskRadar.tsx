@@ -92,61 +92,6 @@ export default function RiskRadar({ results, onSelectProduct }: RiskRadarProps) 
         });
       }
     });
-  } else {
-    // Demo previews if no products ingested yet
-    bubbleClusters.push(
-      {
-        id: 'demo_1',
-        name: 'Frame Fragility & Lens Glare',
-        category: 'Eyewear & Sunglasses',
-        frequencyPercent: 38,
-        severity: 'HIGH',
-        colorClass: 'from-rose-500/30 to-rose-600/40 border-rose-500/50 text-rose-300',
-        glowColor: 'rgba(244,63,94,0.3)',
-        productTitle: 'Dkeraod Retro Square Sunglasses',
-        platform: 'flipkart',
-        quotes: [
-          '"Frame build for retro sunglasses feels plastic-y and thin. Lens glare is noticeable under bright direct sunlight."',
-          '"Hinge screw came loose after 3 days of wearing. Disappointed with frame assembly."'
-        ],
-        aiSummary: '38% of return claims cite plastic frame breakage and high reflective glare without UV400 coating.',
-        productRef: {} as any
-      },
-      {
-        id: 'demo_2',
-        name: 'Fabric Shrinkage & Color Bleed',
-        category: 'Apparel',
-        frequencyPercent: 29,
-        severity: 'HIGH',
-        colorClass: 'from-indigo-500/30 to-purple-600/40 border-indigo-500/50 text-indigo-300',
-        glowColor: 'rgba(99,102,241,0.3)',
-        productTitle: 'Cotton Oversized Printed T-Shirt',
-        platform: 'meesho',
-        quotes: [
-          '"Kapda ekdum raddi hai 1 wash me kharab ho gaya and color bled heavily."',
-          '"Stitching near shoulder armhole is loose with dangling threads."'
-        ],
-        aiSummary: 'Low GSM fabric tensile strength causes 1-inch dimensional shrinkage after initial hand wash.',
-        productRef: {} as any
-      },
-      {
-        id: 'demo_3',
-        name: 'Bluetooth Connection Drop',
-        category: 'Audio Electronics',
-        frequencyPercent: 22,
-        severity: 'MEDIUM',
-        colorClass: 'from-amber-500/30 to-orange-600/40 border-amber-500/50 text-amber-300',
-        glowColor: 'rgba(245,158,11,0.3)',
-        productTitle: 'True Wireless Gaming Earbuds',
-        platform: 'flipkart',
-        quotes: [
-          '"Left earbud stopped charging after 4 days. High treble causes harsh audio distortion at 80% volume."',
-          '"Bluetooth connection drops repeatedly during outdoor walks."'
-        ],
-        aiSummary: 'Firmware latency mismatch and charging pin oxidation reported in 22% of negative reviews.',
-        productRef: {} as any
-      }
-    );
   }
 
   return (
@@ -167,37 +112,51 @@ export default function RiskRadar({ results, onSelectProduct }: RiskRadarProps) 
       </div>
 
       {/* Bubble Chart Canvas Container */}
-      <div className="relative min-h-[320px] bg-black/40 border border-white/5 rounded-xl p-6 flex flex-wrap items-center justify-center gap-6 overflow-hidden">
+      <div className="relative min-h-[320px] bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col items-center justify-center gap-6 overflow-hidden flex-grow">
         {/* Animated background grid */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
 
-        {bubbleClusters.map((bubble, idx) => {
-          // Calculate dynamic size: 100px min to 145px max
-          const sizePx = Math.min(145, Math.max(100, 80 + bubble.frequencyPercent * 1.5));
-          
-          return (
-            <div
-              key={bubble.id || idx}
-              onClick={() => setSelectedBubble(bubble)}
-              style={{
-                width: `${sizePx}px`,
-                height: `${sizePx}px`,
-                boxShadow: `0 0 25px ${bubble.glowColor}`
-              }}
-              className={`rounded-full bg-gradient-to-br ${bubble.colorClass} border-2 flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-300 hover:scale-110 hover:z-20 relative group shadow-xl animate-in fade-in duration-300`}
-            >
-              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 mb-0.5">
-                {bubble.frequencyPercent}% Defect
-              </span>
-              <span className="text-xs font-bold text-white line-clamp-2 leading-tight drop-shadow-md">
-                {bubble.name}
-              </span>
-              <span className="text-[9px] text-neutral-300 font-mono mt-1 opacity-70 group-hover:opacity-100">
-                Click to inspect →
-              </span>
+        {bubbleClusters.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center gap-3 z-10 p-6">
+            <div className="w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center relative">
+              <span className="w-3 h-3 rounded-full bg-indigo-400 animate-ping absolute"></span>
+              <span className="w-3 h-3 rounded-full bg-indigo-500 relative"></span>
             </div>
-          );
-        })}
+            <p className="text-sm font-medium text-neutral-400 max-w-sm">
+              Awaiting product URL to map live vernacular defect clusters...
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-6 z-10 w-full">
+            {bubbleClusters.map((bubble, idx) => {
+              // Calculate dynamic size: 100px min to 145px max
+              const sizePx = Math.min(145, Math.max(100, 80 + bubble.frequencyPercent * 1.5));
+              
+              return (
+                <div
+                  key={bubble.id || idx}
+                  onClick={() => setSelectedBubble(bubble)}
+                  style={{
+                    width: `${sizePx}px`,
+                    height: `${sizePx}px`,
+                    boxShadow: `0 0 25px ${bubble.glowColor}`
+                  }}
+                  className={`rounded-full bg-gradient-to-br ${bubble.colorClass} border-2 flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-300 hover:scale-110 hover:z-20 relative group shadow-xl animate-in fade-in duration-300`}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 mb-0.5">
+                    {bubble.frequencyPercent}% Defect
+                  </span>
+                  <span className="text-xs font-bold text-white line-clamp-2 leading-tight drop-shadow-md">
+                    {bubble.name}
+                  </span>
+                  <span className="text-[9px] text-neutral-300 font-mono mt-1 opacity-70 group-hover:opacity-100">
+                    Click to inspect →
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Interactive Bubble Quote & Diagnostic Modal */}
