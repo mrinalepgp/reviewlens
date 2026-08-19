@@ -125,30 +125,28 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
 
       for (const review of reviews) {
         totalScore += review.rating;
-        const aiAnalysis = await analyzeReviewSentiment(review.content);
-        
-        if (aiAnalysis.sentiment === 'negative') {
+        const isNeg = review.rating <= 2;
+        if (isNeg) {
           negativeCount++;
-          if (aiAnalysis.detected_issue !== 'none' && aiAnalysis.detected_issue !== 'analysis_error') {
-            negativeThemes.add(aiAnalysis.detected_issue);
+          if (review.sentiment && review.sentiment !== 'OPTIMAL') {
+            negativeThemes.add(review.sentiment);
           }
         }
-
         reviewAnalysisData.push({
           review_text: review.content,
           star_rating: review.rating,
-          ai_sentiment: aiAnalysis.sentiment,
-          ai_extracted_issue: aiAnalysis.detected_issue
+          ai_sentiment: isNeg ? 'negative' : review.rating === 3 ? 'neutral' : 'positive',
+          ai_extracted_issue: review.sentiment || 'none'
         });
       }
 
-      const averageScore = Number((totalScore / reviews.length).toFixed(1));
-      const negativeRatio = negativeCount / reviews.length;
-      let riskAssessment: 'safe' | 'warning' | 'critical' = 'safe';
+      const averageScore = Number((totalScore / (reviews.length || 1)).toFixed(1));
+      const intelRiskScore = scrapeResult.intelligence?.executiveScorecard?.returnRiskScore ?? 35;
       
-      if (negativeRatio >= 0.5 || averageScore <= 2.5) {
+      let riskAssessment: 'safe' | 'warning' | 'critical' = 'safe';
+      if (intelRiskScore >= 65) {
         riskAssessment = 'critical';
-      } else if (negativeRatio >= 0.2 || averageScore <= 3.8) {
+      } else if (intelRiskScore >= 35) {
         riskAssessment = 'warning';
       }
       

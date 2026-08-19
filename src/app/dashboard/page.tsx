@@ -105,16 +105,17 @@ function IngestionCard({
   useEffect(() => {
     if (!isLoading) return;
     const texts = [
-      "Parsing product reviews...",
-      "Analyzing return risk vectors...",
-      "Compiling seller playbook..."
+      "Spawning parallel workers to extract deep review catalog...",
+      "Executing Map-Reduce vernacular sentiment parsing...",
+      "Applying recency-decay statistical weighting...",
+      "Finalizing executive risk matrix..."
     ];
     let i = 0;
     setLoadingText(texts[0]);
     const interval = setInterval(() => {
       i = (i + 1) % texts.length;
       setLoadingText(texts[i]);
-    }, 2500);
+    }, 2200);
     return () => clearInterval(interval);
   }, [isLoading]);
 
@@ -227,10 +228,10 @@ function IngestionCard({
 
 function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
   const steps = [
-    { num: 1, label: '[1/4] Scraping verified buyer reviews...' },
-    { num: 2, label: '[2/4] Translating regional & vernacular feedback...' },
-    { num: 3, label: '[3/4] Running Gemini AI defect cluster engine...' },
-    { num: 4, label: '[4/4] Calculating return margin impact...' }
+    { num: 1, label: 'Spawning parallel workers to extract deep review catalog...' },
+    { num: 2, label: 'Executing Map-Reduce vernacular sentiment parsing...' },
+    { num: 3, label: 'Applying recency-decay statistical weighting...' },
+    { num: 4, label: 'Finalizing executive risk matrix...' }
   ];
 
   const currentProgress = Math.min(100, Math.max(15, (activeStep / 4) * 100));
