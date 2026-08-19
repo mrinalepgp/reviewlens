@@ -279,10 +279,16 @@ async function mapReviewChunk(
   
   const modelCandidates = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
   const promptText = `
-You are an expert E-Commerce Quality Engineer & Map-Reduce AI sentiment parser for Indian marketplaces (Flipkart, Meesho, Amazon).
 Analyzing customer reviews for product: "${productTitle}"
 
 ${payloadSnippet}
+
+CRITICAL CATEGORY ALIGNMENT RULE:
+- You MUST strictly generate vernacular decodes and defect clusters that match the exact product category domain of "${productTitle}".
+- FORBID cross-domain terminology! For example:
+  * For Eyewear / Sunglasses / Spectacles: NEVER output apparel/garment terms like "Kapda", "Wash", "Pattern Cutting Shrinkage", or "GSM". Focus exclusively on frame alloy wall thickness, TAC UV polarization, nose-pad pressure, temple hinge screws, and optical wave distortion.
+  * For Apparel / Garments: Focus on fabric GSM, seam fraying, shrinkage, and sizing mismatches.
+  * For Electronics / Audio: Focus on battery drain, Bluetooth latency, and housing plastic strength.
 
 Extract 3 to 5 comprehensive defect clusters matching "${productTitle}".
 Return raw JSON ONLY matching this schema:
@@ -466,15 +472,19 @@ export async function executeMapReduceAnalysis(
   const riskStatus: 'safe' | 'warning' | 'critical' = 
     weightedReturnRiskScore >= 30 ? 'critical' : weightedReturnRiskScore >= 22 ? 'warning' : 'safe';
 
-  // Ensure at least 4-6 rich vernacular decodes
-  const defaultVernacularDecodes = [
+  // Dynamic Category-Aligned Vernacular Decodes Fallback Generator
+  const titleLower = productTitle.toLowerCase();
+  const isEyewear = titleLower.includes('glass') || titleLower.includes('sunglass') || titleLower.includes('eyewear') || titleLower.includes('frame') || titleLower.includes('lens') || titleLower.includes('aviator') || titleLower.includes('retro') || titleLower.includes('square');
+  const isApparel = titleLower.includes('shirt') || titleLower.includes('tshirt') || titleLower.includes('kurti') || titleLower.includes('dress') || titleLower.includes('pant') || titleLower.includes('jeans') || titleLower.includes('saree') || titleLower.includes('cloth') || titleLower.includes('fabric');
+
+  const defaultVernacularDecodes = isEyewear ? [
     {
-      context: reviews[0]?.content || "Kapda patla hai aur frame 2 din me toot gaya",
+      context: reviews[0]?.content || "Frame build weak hai, 2 din me hinge toot gaya",
       originalTerm: "Kharab build",
       englishMeaning: "Poor Structural Integrity & Thin Frame Wall",
-      rawVernacularText: reviews[0]?.content || "Kharab build",
+      rawVernacularText: reviews[0]?.content || "Frame build weak hai",
       detectedLanguage: "Hinglish",
-      decodedIntent: "Frame stress fracture risk / Low GSM tensile strength",
+      decodedIntent: "Frame stress fracture risk / Thin alloy wall thickness",
       businessImpactCategory: "Manufacturing Defect / Refund Claim"
     },
     {
@@ -496,13 +506,13 @@ export async function executeMapReduceAnalysis(
       businessImpactCategory: "Component Failure"
     },
     {
-      context: "L size mangwaya tha par M size jaisa lag raha hai 1 wash ke baad",
-      originalTerm: "Size chota pad gaya",
-      englishMeaning: "Pattern Cutting Shrinkage & Sizing Undersized",
-      rawVernacularText: "L size mangwaya tha par M size jaisa lag raha hai 1 wash ke baad",
+      context: "Lens me out of box micro scratches hain",
+      originalTerm: "Scratch lag gaya",
+      englishMeaning: "Lens Protective Film Mismatch & Surface Coating Fragility",
+      rawVernacularText: "Lens me out of box micro scratches hain",
       detectedLanguage: "Hinglish",
-      decodedIntent: "Garment cutting without pre-steam shrinking treatment",
-      businessImpactCategory: "Sizing Mismatch / Exchange Request"
+      decodedIntent: "Packaging transit rubbing without anti-scratch protective film",
+      businessImpactCategory: "Packaging Defect"
     },
     {
       context: "Nose pad bohot tight hai aur skin pe red marks ban rahe hain",
@@ -513,19 +523,88 @@ export async function executeMapReduceAnalysis(
       decodedIntent: "Molded rigid PVC nose pad lacking flex memory",
       businessImpactCategory: "Ergonomics Defect"
     }
+  ] : isApparel ? [
+    {
+      context: reviews[0]?.content || "Kapda patla hai aur transparent lag raha hai",
+      originalTerm: "Kapda raddi hai",
+      englishMeaning: "Low GSM Fabric & Tensile Fragility",
+      rawVernacularText: reviews[0]?.content || "Kapda raddi hai",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Sub-standard yarn count causing early transparency",
+      businessImpactCategory: "Quality Defect / Refund Claim"
+    },
+    {
+      context: "L size mangwaya tha par M size jaisa lag raha hai 1 wash ke baad",
+      originalTerm: "Size chota pad gaya",
+      englishMeaning: "Pattern Cutting Shrinkage & Sizing Undersized",
+      rawVernacularText: "L size mangwaya tha par M size jaisa lag raha hai 1 wash ke baad",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Garment cutting without pre-steam shrinking treatment",
+      businessImpactCategory: "Sizing Mismatch / Exchange Request"
+    },
+    {
+      context: "First wash ke baad color nikal gaya aur fade ho gaya",
+      originalTerm: "Color nikal gaya",
+      englishMeaning: "Unbound Batch Dye Degradation & Color Bleeding",
+      rawVernacularText: "First wash ke baad color nikal gaya",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Lack of post-dye salt wash fixative setting step",
+      businessImpactCategory: "Quality Defect"
+    },
+    {
+      context: "Side seam stitches khul rahe hain edges se",
+      originalTerm: "Dhaga nikal raha hai",
+      englishMeaning: "Single-Needle Seam Joint Fraying",
+      rawVernacularText: "Side seam stitches khul rahe hain edges se",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Low SPI (Stitches Per Inch) lockstitch density",
+      businessImpactCategory: "Workmanship Defect"
+    }
+  ] : [
+    {
+      context: reviews[0]?.content || "Build quality is poor and component feels fragile",
+      originalTerm: "Kharab build",
+      englishMeaning: "Poor Structural Build & Material Discrepancy",
+      rawVernacularText: reviews[0]?.content || "Kharab build",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Sub-standard component housing stress tolerance",
+      businessImpactCategory: "Manufacturing Defect"
+    },
+    {
+      context: "Product sizing mismatch compared to description image",
+      originalTerm: "Size alag hai",
+      englishMeaning: "Dimension Discrepancy vs Listing Graphic",
+      rawVernacularText: "Product sizing mismatch compared to description image",
+      detectedLanguage: "Hinglish",
+      decodedIntent: "Inaccurate spec callouts in product detail carousel",
+      businessImpactCategory: "Listing Discrepancy"
+    }
   ];
 
-  const vernacularDecoder = consolidatedVernacular.length >= 4 
-    ? consolidatedVernacular.slice(0, 6) 
+  // Filter out any cross-domain decodes from consolidatedVernacular if analyzing eyewear
+  const filteredConsolidated = consolidatedVernacular.filter(item => {
+    if (isEyewear) {
+      const text = `${item.originalTerm} ${item.englishMeaning} ${item.decodedIntent} ${item.context}`.toLowerCase();
+      if (text.includes('kapda') || text.includes('fabric') || text.includes('wash') || text.includes('shrinkage') || text.includes('gsm')) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const vernacularDecoder = filteredConsolidated.length >= 3 
+    ? filteredConsolidated.slice(0, 6) 
     : defaultVernacularDecodes;
 
+  const sampleEyewearReviews = [
+    { id: 'rev-1', marketplace, rating: 1, content: `Frame build for ${productTitle} feels plastic-y and thin. Hinge screw came loose in 3 days.`, author: "Ritik S.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isSuspicious: false },
+    { id: 'rev-2', marketplace, rating: 2, content: `Dhoop me bohot glare hai, aakho me pain hone lagta hai after 15 mins of wearing.`, author: "Priya M.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isSuspicious: false },
+    { id: 'rev-3', marketplace, rating: 1, content: `Frame coating came off after 2 days of exposure to direct sunlight.`, author: "Amit K.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isSuspicious: true },
+    { id: 'rev-4', marketplace, rating: 4, content: `Design looks good and fit is decent for the price. Fast delivery.`, author: "Sneha P.", date: "2026-08-15", sentiment: "POSITIVE", isSuspicious: false }
+  ];
+
   return {
-    reviews: reviews.length > 0 ? reviews : [
-      { id: 'rev-1', marketplace, rating: 1, content: `Frame build for ${productTitle} feels plastic-y and thin. Hinge screw came loose in 3 days.`, author: "Ritik S.", date: "2026-08-18", sentiment: "DEFECT_ALERT", isSuspicious: false },
-      { id: 'rev-2', marketplace, rating: 2, content: `Dhoop me bohot glare hai, aakho me pain hone lagta hai after 15 mins of wearing.`, author: "Priya M.", date: "2026-08-17", sentiment: "DEFECT_ALERT", isSuspicious: false },
-      { id: 'rev-3', marketplace, rating: 1, content: `Kapda ekdum patla aur transparent hai, 1 wash me shrink ho gaya.`, author: "Amit K.", date: "2026-08-16", sentiment: "DEFECT_ALERT", isSuspicious: true },
-      { id: 'rev-4', marketplace, rating: 4, content: `Design looks good and fit is decent for the price. Fast delivery.`, author: "Sneha P.", date: "2026-08-15", sentiment: "POSITIVE", isSuspicious: false }
-    ],
+    reviews: reviews.length > 0 ? reviews : sampleEyewearReviews,
     raw_reviews: reviews,
     executiveScorecard: {
       returnRiskScore: weightedReturnRiskScore,
