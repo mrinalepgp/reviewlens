@@ -106,7 +106,7 @@ export default function ExecutiveConsole({
   };
   
   const formatINR = (num: number) => {
-    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
+    return 'INR ' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(num);
   };
   
   const riskScore = executiveScorecard?.returnRiskScore || 0;
@@ -194,24 +194,24 @@ export default function ExecutiveConsole({
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium text-neutral-300">Average Selling Price (ASP)</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2.5 text-neutral-500">₹</span>
+                    <span className="absolute left-3 top-2.5 text-xs text-neutral-500 font-mono">INR</span>
                     <input 
                       type="number" 
                       value={asp} 
                       onChange={(e) => setAsp(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-8 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-11 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
                     />
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-sm font-medium text-neutral-300">Return Logistics Cost per Unit</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2.5 text-neutral-500">₹</span>
+                    <span className="absolute left-3 top-2.5 text-xs text-neutral-500 font-mono">INR</span>
                     <input 
                       type="number" 
                       value={returnCost} 
                       onChange={(e) => setReturnCost(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-8 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-11 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
                     />
                   </div>
                 </div>

@@ -63,7 +63,7 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
   return [
     {
       id: "cluster-1",
-      title: `${productTitle} - Material & Structural Integrity`,
+      title: "Material & Structural Integrity",
       sharePercentage: 42,
       severity: "Critical",
       vernacularQuotes: rawQuotes.length >= 2 ? rawQuotes.slice(0, 2) : [
@@ -80,7 +80,7 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
     },
     {
       id: "cluster-2",
-      title: `${productTitle} - Specification & Dimensional Discrepancy`,
+      title: "Specification & Dimensional Discrepancy",
       sharePercentage: 33,
       severity: "High",
       vernacularQuotes: rawQuotes.length >= 4 ? rawQuotes.slice(2, 4) : [
@@ -97,7 +97,7 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
     },
     {
       id: "cluster-3",
-      title: `${productTitle} - Packaging & Transit Protection`,
+      title: "Packaging & Transit Protection",
       sharePercentage: 25,
       severity: "Moderate",
       vernacularQuotes: rawQuotes.length >= 5 ? rawQuotes.slice(4, 5) : [
@@ -377,7 +377,7 @@ export async function executeMapReduceAnalysis(
     executiveScorecard: {
       returnRiskScore: weightedReturnRiskScore,
       listingHealthScore,
-      estimatedMarginLossRange: `₹${Math.round(estimatedCapitalProtected * 0.35).toLocaleString('en-IN')} - ₹${Math.round(estimatedCapitalProtected * 0.70).toLocaleString('en-IN')}`,
+      estimatedMarginLossRange: `INR ${Math.round(estimatedCapitalProtected * 0.35).toLocaleString('en-IN')} - INR ${Math.round(estimatedCapitalProtected * 0.70).toLocaleString('en-IN')}`,
       primaryRiskDriver,
       estimatedCapitalProtected,
       riskLevel: riskStatus === 'critical' ? 'Critical Risk' : riskStatus === 'warning' ? 'Warning' : 'Optimal'
