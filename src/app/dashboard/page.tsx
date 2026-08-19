@@ -984,9 +984,10 @@ function SettingsManagerModal({
   };
 
   const renderBilling = () => {
-    const maxCredits = 50;
-    const creditsUsed = Math.max(0, maxCredits - (userState?.credits ?? 0));
-    const progressPercent = Math.min(100, Math.round((creditsUsed / maxCredits) * 100));
+    const totalQuota = 50;
+    const usedAudits = historicalData ? historicalData.length : 0;
+    const remainingCredits = Math.max(0, totalQuota - usedAudits);
+    const progressPercent = Math.min(100, Math.max(0, (usedAudits / totalQuota) * 100));
 
     return (
       <div className="flex flex-col gap-6">
@@ -1002,12 +1003,12 @@ function SettingsManagerModal({
           <div className="space-y-2 mt-2">
             <div className="flex justify-between text-sm">
               <span className="text-neutral-300 font-medium">SKU Audits Used</span>
-              <span className="text-white font-bold">{creditsUsed} / {maxCredits}</span>
+              <span className="text-white font-bold">{usedAudits} / {totalQuota}</span>
             </div>
             <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
               <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
             </div>
-            <p className="text-xs text-neutral-500 text-right">{userState?.credits ?? 0} credits remaining</p>
+            <p className="text-xs text-neutral-500 text-right">{remainingCredits} credits remaining</p>
           </div>
         </div>
 
@@ -1275,7 +1276,7 @@ export default function Dashboard() {
             </button>
             
             <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
-              <span className="text-xs font-bold text-amber-400">⚡ {userState?.credits ?? 0}/50</span>
+              <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - historicalData.length)}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
 

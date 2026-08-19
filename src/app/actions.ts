@@ -344,7 +344,7 @@ export async function fetchDashboardStateAction() {
         whatsapp_alerts_enabled: user.user_metadata?.whatsapp_alerts_enabled || false,
         providers: user.app_metadata?.providers || [],
         initials: user.email ? user.email.substring(0, 2).toUpperCase() : 'US',
-        credits: profile?.credits ?? 0,
+        credits: profile?.credits ?? 50,
         plan: profile?.plan_tier ?? 'Hobby'
       },
       historicalData
