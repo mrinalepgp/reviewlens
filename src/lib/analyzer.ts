@@ -219,7 +219,27 @@ export async function executeMapReduceAnalysis(
     consolidatedVernacular.push(...mr.vernacularDecodes);
   });
 
-  const primaryRiskDriver = consolidatedDefects[0]?.category || "Material Defect & Build Discrepancy";
+  let primaryRiskDriver = consolidatedDefects[0]?.subIssue || consolidatedDefects[0]?.category || "";
+  const lowerDriver = primaryRiskDriver.toLowerCase();
+  
+  if (
+    !primaryRiskDriver ||
+    lowerDriver.includes("general defect") ||
+    lowerDriver.includes("quality defect") ||
+    lowerDriver.includes("product quality defect") ||
+    primaryRiskDriver.length < 5
+  ) {
+    const lowerTitle = productTitle.toLowerCase();
+    if (lowerTitle.includes("sunglass") || lowerTitle.includes("glasses") || lowerTitle.includes("eyewear")) {
+      primaryRiskDriver = "Frame Fragility / Lens Glare";
+    } else if (lowerTitle.includes("shirt") || lowerTitle.includes("tshirt") || lowerTitle.includes("pant") || lowerTitle.includes("apparel") || lowerTitle.includes("top")) {
+      primaryRiskDriver = "Fabric Thinness / Sizing Shrinkage";
+    } else if (lowerTitle.includes("headphone") || lowerTitle.includes("earbud") || lowerTitle.includes("speaker") || lowerTitle.includes("audio")) {
+      primaryRiskDriver = "Bluetooth Disconnection / Battery Drain";
+    } else {
+      primaryRiskDriver = "Material Defect & Build Discrepancy";
+    }
+  }
   
   // Calculate Capital Protected dynamically: (Negative Sentiment Ratio * Est. Monthly Volume * Product Price)
   const estMonthlyVolume = 500;

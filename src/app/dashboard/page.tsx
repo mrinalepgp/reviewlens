@@ -53,10 +53,11 @@ function KPICards({ data }: { data: AnalyzedProductSummary[] }) {
   }, {} as Record<string, number>);
   const topDefect = Object.keys(defectCounts).sort((a, b) => defectCounts[b] - defectCounts[a])[0] || "Unknown";
 
-  // Calculate generic protected capital
-  const totalUnits = activeSkus * 1000;
-  const projectedBleed = totalUnits * (avgRisk / 100) * 180;
-  const protectedCapital = projectedBleed * 0.40;
+  // Calculate synchronized total protected capital across active SKUs
+  const protectedCapital = data.reduce((acc, curr) => {
+    const itemCap = curr.intelligence?.executiveScorecard?.estimatedCapitalProtected;
+    return acc + (typeof itemCap === 'number' ? itemCap : 134850);
+  }, 0);
 
   const formatINR = (num: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);

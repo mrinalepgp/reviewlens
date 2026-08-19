@@ -50,6 +50,37 @@ function getRandomUserAgent() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
+export function cleanScrapedTitle(rawTitle: string, parsedMetaTitle: string): string {
+  if (!rawTitle) return parsedMetaTitle;
+
+  let cleaned = rawTitle
+    .replace(/^Product\s+Reviews:\s*/i, '')
+    .replace(/^Reviews\s+of\s*/i, '')
+    .replace(/^All\s+Reviews\s*(for|of)?\s*/i, '')
+    .replace(/\|\s*Flipkart\.com.*$/i, '')
+    .replace(/-\s*Buy\s+.*$/i, '')
+    .replace(/Online\s+at\s+Best\s+Price.*$/i, '')
+    .replace(/Online\s+Shopping\s+Site.*$/i, '')
+    .replace(/Just\s+a\s+moment\.*$/i, '')
+    .trim();
+
+  const lower = cleaned.toLowerCase();
+  if (
+    !cleaned ||
+    lower === 'all reviews' ||
+    lower === 'flipkart.com' ||
+    lower === 'meesho' ||
+    lower.includes('just a moment') ||
+    lower.includes('browser verification') ||
+    lower.includes('online shopping site') ||
+    cleaned.length < 3
+  ) {
+    return parsedMetaTitle;
+  }
+
+  return cleaned;
+}
+
 export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { title: string; category: string; brand: string } {
   try {
     const urlObj = new URL(url);
@@ -57,19 +88,15 @@ export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { t
     const segments = pathname.split('/').filter(Boolean);
 
     let rawTitle = '';
-    if (marketplace === 'flipkart') {
-      if (segments.length > 0 && segments[0] !== 'product-reviews' && segments[0] !== 'p') {
-        rawTitle = segments[0];
-      } else if (segments.length > 1 && (segments[0] === 'product-reviews' || segments[0] === 'p')) {
-        rawTitle = segments[1];
+    for (const seg of segments) {
+      if (seg !== 'p' && seg !== 'product-reviews' && !seg.startsWith('itm') && !seg.startsWith('ps')) {
+        rawTitle = seg;
+        break;
       }
-    } else if (marketplace === 'meesho') {
-      const lastSeg = segments[segments.length - 1] || '';
-      rawTitle = lastSeg.replace(/^[a-z0-9]+-/, '');
     }
 
-    if (!rawTitle && segments.length > 0) {
-      rawTitle = segments[0];
+    if (marketplace === 'meesho' && rawTitle) {
+      rawTitle = rawTitle.replace(/^[a-z0-9]+-/, '');
     }
 
     let cleanTitle = rawTitle
@@ -77,7 +104,7 @@ export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { t
       .replace(/\b\w/g, c => c.toUpperCase())
       .trim();
 
-    if (!cleanTitle || cleanTitle.toLowerCase() === 'p' || cleanTitle.toLowerCase() === 'product reviews') {
+    if (!cleanTitle || cleanTitle.toLowerCase() === 'p' || cleanTitle.toLowerCase() === 'product reviews' || cleanTitle.toLowerCase() === 'all reviews') {
       cleanTitle = `${marketplace.toUpperCase()} Catalog Item`;
     }
 
@@ -300,7 +327,10 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       const $ = cheerio.load(html || "<html></html>");
-      let pTitle = $('span.VU-ZEz, span.B_NuCI, h1._6ERy96, h1.ProductTitle, h1').first().text().trim() || $('title').text().trim();
+      let pTitle = $('span.B_NuCI, h1._6EBuvT, span.VU-ZEz, h1.ProductTitle, h1._6ERy96').first().text().trim();
+      if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com')) {
+        pTitle = "";
+      }
       const extractedReviews: ReviewPayload[] = [];
 
       $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText, div.ReviewContainer, div[class*="review"]').each((idx, el) => {
@@ -333,14 +363,17 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
     settledResults.forEach((res) => {
       if (res.status === 'fulfilled' && res.value) {
-        if (!scrapedTitle && res.value.title && !res.value.title.toLowerCase().includes('just a moment')) {
-          scrapedTitle = res.value.title;
+        if (!scrapedTitle && res.value.title) {
+          const cleaned = cleanScrapedTitle(res.value.title, parsedMeta.title);
+          if (cleaned !== parsedMeta.title) {
+            scrapedTitle = cleaned;
+          }
         }
         if (res.value.reviews) allExtractedReviews.push(...res.value.reviews);
       }
     });
 
-    const finalTitle = scrapedTitle || parsedMeta.title;
+    const finalTitle = cleanScrapedTitle(scrapedTitle, parsedMeta.title);
     const finalCategory = parsedMeta.category;
     const finalBrand = parsedMeta.brand;
     const estimatedPrice = "₹899";
