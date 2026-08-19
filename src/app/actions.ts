@@ -188,7 +188,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         const { data: productData, error: productError } = await supabase
           .from('tracked_products')
           .insert({
-            user_id: user.id, // Using the real authenticated user UUID
+            user_id: user.id,
             platform: scrapeResult.marketplace,
             product_url: url,
             product_name: productName,
@@ -201,6 +201,24 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
           
         if (productError) {
           console.error("[Database] Failed to insert tracked_product metadata:", productError.message);
+          try {
+            const { data: altData } = await supabase
+              .from('analyses')
+              .insert({
+                user_id: user.id,
+                product_url: url,
+                platform: scrapeResult.marketplace,
+                product_name: productName,
+                average_rating: averageScore,
+                risk_status: riskAssessment,
+                intelligence_data: safeIntelligenceData
+              })
+              .select('id')
+              .single();
+            if (altData?.id) dbProductId = altData.id;
+          } catch (altErr) {
+            console.error("[Database] Fallback insert to analyses table failed:", altErr);
+          }
         } else if (productData?.id) {
           dbProductId = productData.id;
           const reviewsToInsert = reviewAnalysisData.map(r => ({
@@ -216,19 +234,19 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             console.error("[Database] Failed to batch insert review_analysis records:", reviewsError.message);
           } else {
             console.log(`[Database] Successfully committed product metadata and ${reviewsToInsert.length} analysis records.`);
-            
-            // Deduct 1 credit for successful analysis
-            currentCredits -= 1;
-            const { error: creditError } = await supabase
-              .from('user_profiles')
-              .update({ credits: currentCredits })
-              .eq('id', user.id);
-            if (creditError) {
-               console.error("[Database] Failed to deduct credit:", creditError.message);
-            } else {
-               console.log(`[Database] Deducted 1 credit. Remaining: ${currentCredits}`);
-            }
           }
+        }
+
+        // Always deduct 1 credit upon successful analysis execution
+        currentCredits -= 1;
+        const { error: creditError } = await supabase
+          .from('user_profiles')
+          .update({ credits: currentCredits })
+          .eq('id', user.id);
+        if (creditError) {
+          console.error("[Database] Failed to deduct credit:", creditError.message);
+        } else {
+          console.log(`[Database] Deducted 1 credit. Remaining: ${currentCredits}`);
         }
       } catch (dbError) {
         console.error("[Database] Unhandled transaction exception:", dbError);
@@ -355,11 +373,26 @@ export async function fetchDashboardStateAction() {
       .maybeSingle();
 
     // Get historical data
-    const { data: products } = await supabase
+    let { data: products } = await supabase
       .from('tracked_products')
       .select('*')
       .eq('user_id', user.id)
       .order('id', { ascending: false });
+
+    if (!products || products.length === 0) {
+      try {
+        const { data: altProducts } = await supabase
+          .from('analyses')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('id', { ascending: false });
+        if (altProducts && altProducts.length > 0) {
+          products = altProducts;
+        }
+      } catch {
+        // ignore if analyses table does not exist
+      }
+    }
 
     // Format historical data
     const historicalData: AnalyzedProductSummary[] = (products || []).map((p: any) => ({

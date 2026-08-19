@@ -1089,9 +1089,9 @@ export default function Dashboard() {
       const res = await fetchDashboardStateAction();
       if (res.success) {
         setUserState(res.user);
-        setHistoricalData(res.historicalData || []);
-        // Do NOT populate Risk Radar with historical data on mount
-        // setResults(res.historicalData || []);
+        const catalog = res.historicalData || [];
+        setHistoricalData(catalog);
+        setResults(catalog);
       } else {
         setError(res.error || "Failed to load dashboard state.");
       }
@@ -1123,14 +1123,16 @@ export default function Dashboard() {
       
       if (response.success) {
         setActiveStep(3);
-        setResults((prev) => [...response.summaries, ...prev]);
-        setHistoricalData((prev) => [...response.summaries, ...prev]);
-        setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - response.summaries.length) } : prev);
+        const updatedSummaries = response.summaries;
+        setHistoricalData((prev) => [...updatedSummaries, ...prev]);
+        setResults((prev) => [...updatedSummaries, ...prev]);
+        setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
-        // Instant background sync
+        // Background sync to pull latest state from database
         fetchDashboardStateAction().then(res => {
           if (res.success && res.historicalData) {
             setHistoricalData(res.historicalData);
+            setResults(res.historicalData);
           }
         });
       } else {
