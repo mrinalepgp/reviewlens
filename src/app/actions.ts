@@ -443,16 +443,23 @@ export async function fetchDashboardStateAction() {
     }
 
     // Format historical data
-    const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: any) => ({
-      id: p.id,
-      url: p.product_url || p.url,
-      platform: p.platform,
-      title: p.product_name || p.title,
-      averageScore: p.average_rating || p.averageScore || 4.0,
-      riskAssessment: p.risk_status || p.riskAssessment || 'safe',
-      negativeThemes: p.intelligence_data?.executiveScorecard?.primaryRiskDriver ? [p.intelligence_data.executiveScorecard.primaryRiskDriver] : [],
-      intelligence: p.intelligence_data || p.intelligence
-    }));
+    const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: any) => {
+      const intel = p.intelligence_data || p.intelligence || {};
+      if ((!intel.defectTaxonomy || intel.defectTaxonomy.length === 0) && p.defect_clusters && Array.isArray(p.defect_clusters)) {
+        intel.defectTaxonomy = p.defect_clusters;
+      }
+      return {
+        id: p.id,
+        url: p.product_url || p.url,
+        platform: p.platform,
+        title: p.product_name || p.title || p.product_title,
+        category: p.category,
+        averageScore: p.average_rating || p.averageScore || 4.0,
+        riskAssessment: p.risk_status || p.riskAssessment || 'safe',
+        negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
+        intelligence: intel
+      };
+    });
 
     return {
       success: true,
