@@ -247,15 +247,21 @@ function RiskBadge({ status }: { status: HealthStatus }) {
 
 function HistoricalTable({ 
   data, 
-  onSelectProduct,
-  onDeleteProduct,
-  onClearAll
+  onSelectProduct, 
+  onDeleteProduct, 
+  onClearAll,
+  activeAnalysisId,
+  onInspectRadar
 }: { 
-  data: AnalyzedProductSummary[], 
-  onSelectProduct: (product: AnalyzedProductSummary) => void,
-  onDeleteProduct: (id: string) => void,
-  onClearAll: () => void
+  data: AnalyzedProductSummary[]; 
+  onSelectProduct: (product: AnalyzedProductSummary) => void; 
+  onDeleteProduct: (id: string) => void;
+  onClearAll: () => void;
+  activeAnalysisId?: string | null;
+  onInspectRadar?: (productId: string) => void;
 }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
   if (!data || data.length === 0) {
     return (
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-4 mt-8">
@@ -270,19 +276,31 @@ function HistoricalTable({
     );
   }
 
+  const filteredData = data.filter(item => 
+    item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.intelligence?.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-6 mt-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-lg font-semibold text-white">Historical Catalog Analysis</h2>
-          <p className="text-sm text-neutral-400 mt-1">Review past AI reports and monitor listing performance.</p>
+          <p className="text-sm text-neutral-400 mt-1">Review past AI reports, inspect defect radars, and monitor listing performance.</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
             <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input type="text" placeholder="Search SKUs..." className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search SKUs..." 
+              className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" 
+            />
           </div>
           <button onClick={onClearAll} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -303,52 +321,100 @@ function HistoricalTable({
             </tr>
           </thead>
           <tbody>
-            {data.map((item, idx) => (
-              <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="px-4 py-3 font-medium text-neutral-200 max-w-sm">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-sm font-semibold text-white truncate max-w-xs">{item.title}</span>
-                    {item.intelligence?.category && (
-                      <span className="text-[10px] text-emerald-400/90 font-mono uppercase tracking-wider">{item.intelligence.category}</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 uppercase">
-                    {item.platform}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <RiskBadge status={item.riskAssessment} />
-                    <span className="text-xs font-mono font-bold text-neutral-300">
-                      {item.intelligence?.executiveScorecard?.returnRiskScore ?? '28.5'}%
+            {filteredData.map((item, idx) => {
+              const itemKey = item.id || item.url || item.title || `${idx}`;
+              const isActive = activeAnalysisId 
+                ? (item.id === activeAnalysisId || item.url === activeAnalysisId || item.title === activeAnalysisId)
+                : (idx === 0);
+
+              return (
+                <tr 
+                  key={idx} 
+                  onClick={() => onInspectRadar?.(itemKey)}
+                  className={`border-b border-white/5 transition-all cursor-pointer ${
+                    isActive ? 'bg-indigo-500/15 border-l-4 border-l-indigo-500 shadow-sm' : 'hover:bg-white/5'
+                  }`}
+                >
+                  <td className="px-4 py-3 font-medium text-neutral-200 max-w-sm">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white truncate max-w-xs">{item.title}</span>
+                        {isActive && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 uppercase tracking-wider">
+                            Active Radar 🎯
+                          </span>
+                        )}
+                      </div>
+                      {item.intelligence?.category && (
+                        <span className="text-[10px] text-emerald-400/90 font-mono uppercase tracking-wider">{item.intelligence.category}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 uppercase">
+                      {item.platform}
                     </span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs font-bold text-emerald-400">
-                  ₹{(item.intelligence?.executiveScorecard?.estimatedCapitalProtected || 134850).toLocaleString('en-IN')}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <button onClick={() => onSelectProduct(item)} className="text-indigo-400 hover:text-indigo-300 font-medium text-xs">
-                      Deep Dive →
-                    </button>
-                    {item.id && (
-                      <button onClick={() => onDeleteProduct(item.id!)} className="text-neutral-500 hover:text-rose-400 transition-colors p-1" title="Delete Product">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <RiskBadge status={item.riskAssessment} />
+                      <span className="text-xs font-mono font-bold text-neutral-300">
+                        {item.intelligence?.executiveScorecard?.returnRiskScore ?? '28.5'}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs font-bold text-emerald-400">
+                    ₹{(item.intelligence?.executiveScorecard?.estimatedCapitalProtected || 134850).toLocaleString('en-IN')}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2.5">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onInspectRadar?.(itemKey);
+                        }} 
+                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
+                          isActive 
+                          ? 'bg-indigo-600 text-white shadow-md' 
+                          : 'bg-white/5 hover:bg-indigo-500/20 text-neutral-300 hover:text-indigo-300 border border-white/10'
+                        }`}
+                      >
+                        {isActive ? 'Active Radar 🎯' : 'Inspect Radar'}
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectProduct(item);
+                        }} 
+                        className="text-indigo-400 hover:text-indigo-300 font-medium text-xs hover:underline"
+                      >
+                        Console →
+                      </button>
+
+                      {item.id && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteProduct(item.id!);
+                          }} 
+                          className="text-neutral-500 hover:text-rose-400 transition-colors p-1 ml-1" 
+                          title="Delete Product"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       
       <div className="flex items-center justify-between text-xs text-neutral-500">
-        <span>Showing 1 to {data.length} of {data.length} entries</span>
+        <span>Showing 1 to {filteredData.length} of {data.length} entries</span>
         <div className="flex gap-1">
           <button className="px-2 py-1 border border-white/10 rounded hover:bg-white/5 disabled:opacity-50" disabled>Prev</button>
           <button className="px-2 py-1 border border-white/10 rounded bg-white/10 text-white">1</button>
@@ -792,6 +858,7 @@ const MOCK_HISTORICAL_DATA: AnalyzedProductSummary[] = [
 
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<AnalyzedProductSummary[]>([]);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
@@ -800,12 +867,22 @@ export default function Dashboard() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [userState, setUserState] = useState<any>(null);
 
+  const activeProduct = analyses.find(a => 
+    (a.id && a.id === activeAnalysisId) || 
+    (a.url && a.url === activeAnalysisId) || 
+    (a.title && a.title === activeAnalysisId)
+  ) || analyses[0] || null;
+
   useEffect(() => {
     async function loadInitialState() {
       const res = await fetchDashboardStateAction();
       if (res.success) {
         setUserState(res.user);
-        setAnalyses(res.historicalData || []);
+        const data = res.historicalData || [];
+        setAnalyses(data);
+        if (data.length > 0 && !activeAnalysisId) {
+          setActiveAnalysisId(data[0].id || data[0].url || data[0].title);
+        }
       } else {
         setError(res.error || "Failed to load dashboard state.");
       }
@@ -815,6 +892,9 @@ export default function Dashboard() {
 
   const loadDemoData = () => {
     setAnalyses(MOCK_HISTORICAL_DATA);
+    if (MOCK_HISTORICAL_DATA.length > 0) {
+      setActiveAnalysisId(MOCK_HISTORICAL_DATA[0].id || MOCK_HISTORICAL_DATA[0].url || MOCK_HISTORICAL_DATA[0].title);
+    }
   };
 
   const handleAnalyze = async (urls: string[]) => {
@@ -837,6 +917,10 @@ export default function Dashboard() {
       if (response.success) {
         setActiveStep(3);
         const updatedSummaries = response.summaries;
+        if (updatedSummaries.length > 0) {
+          const newId = updatedSummaries[0].id || updatedSummaries[0].url || updatedSummaries[0].title;
+          if (newId) setActiveAnalysisId(newId);
+        }
         setAnalyses((prev) => {
           const existingIds = new Set(prev.map(p => p.id || p.title));
           const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
@@ -989,7 +1073,12 @@ export default function Dashboard() {
 
           {/* 3. Priority-sorted Risk Radar */}
           <div className="lg:col-span-3">
-            <RiskRadar results={analyses} onSelectProduct={setSelectedProduct} />
+            <RiskRadar 
+              results={analyses} 
+              activeProduct={activeProduct}
+              onSelectProduct={setSelectedProduct} 
+              onSwitchActiveProduct={(id) => setActiveAnalysisId(id)}
+            />
           </div>
         </div>
 
@@ -999,6 +1088,8 @@ export default function Dashboard() {
           onSelectProduct={setSelectedProduct} 
           onDeleteProduct={handleDeleteProduct}
           onClearAll={handleClearAll}
+          activeAnalysisId={activeAnalysisId}
+          onInspectRadar={(id) => setActiveAnalysisId(id)}
         />
       </main>
 

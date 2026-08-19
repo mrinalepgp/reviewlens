@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
+import { exportSupplierAuditPDF } from '@/lib/pdfExport';
 import { AnalyzedProductSummary } from '@/app/actions';
 
 export default function ExecutiveConsole({
@@ -13,6 +14,7 @@ export default function ExecutiveConsole({
   const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors' | 'shield'>('diagnostics');
   const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'POSITIVE'>('ALL');
   const [copiedDisputeTicket, setCopiedDisputeTicket] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   // Calculator State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
@@ -20,6 +22,17 @@ export default function ExecutiveConsole({
   const [returnCost, setReturnCost] = useState<number>(180);
   
   const intelligence = product.intelligence || {};
+
+  const handleExportPDF = () => {
+    setIsExportingPDF(true);
+    try {
+      exportSupplierAuditPDF(product);
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setTimeout(() => setIsExportingPDF(false), 1500);
+    }
+  };
   
   const executiveScorecard = intelligence.executiveScorecard || {
     returnRiskScore: 0,
@@ -138,9 +151,18 @@ export default function ExecutiveConsole({
             </div>
             <h3 className="text-2xl font-bold text-white tracking-tight">{product.title}</h3>
           </div>
-          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5">
-            ✕
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleExportPDF}
+              disabled={isExportingPDF}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] flex items-center gap-2 border border-indigo-400/30 shrink-0"
+            >
+              {isExportingPDF ? '⏳ Generating PDF...' : '📥 Export AI Supplier Audit (PDF)'}
+            </button>
+            <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5 shrink-0">
+              ✕
+            </button>
+          </div>
         </div>
         
         <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-8 custom-scrollbar">
