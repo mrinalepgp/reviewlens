@@ -17,11 +17,14 @@ export interface ReviewPayload {
 }
 
 export interface EnterpriseIntelligence {
+  reviews?: any[];
+  raw_reviews?: any[];
   executiveScorecard?: any;
   defectTaxonomy?: any[];
   vernacularDecoder?: any[];
   mitigationPlaybook?: any;
   authenticityRadar?: any;
+  competitorRadar?: any;
   competitorDiscovery?: any[];
 }
 
