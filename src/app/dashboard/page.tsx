@@ -894,6 +894,8 @@ export default function Dashboard() {
   const [userState, setUserState] = useState<any>(null);
   const [isIngestionModalOpen, setIsIngestionModalOpen] = useState(false);
   const [marketplaceFilter, setMarketplaceFilter] = useState<'all' | 'flipkart' | 'meesho'>('all');
+  const [currentSkuIndex, setCurrentSkuIndex] = useState(0);
+  const [totalSkus, setTotalSkus] = useState(0);
 
   const activeProduct = analyses.find(a => 
     (a.id && a.id === activeAnalysisId) || 
@@ -929,6 +931,8 @@ export default function Dashboard() {
     setIsLoading(true);
     setActiveStep(1);
     setError(null);
+    setCurrentSkuIndex(1);
+    setTotalSkus(urls.length);
 
     const stepInterval = setInterval(() => {
       setActiveStep((prev) => (prev < 3 ? prev + 1 : prev));
@@ -937,18 +941,21 @@ export default function Dashboard() {
     try {
       const response = await Promise.race([
         analyzeUrlsAction(urls),
-        new Promise<never>((_, reject) => 
+        new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("TIMEOUT_90S")), 90000)
         )
       ]);
-      
+
       if (response.success) {
         setActiveStep(3);
         const updatedSummaries = response.summaries;
+
+        // Auto-focus the first newly analyzed product
         if (updatedSummaries.length > 0) {
           const newId = updatedSummaries[0].id || updatedSummaries[0].url || updatedSummaries[0].title;
           if (newId) setActiveAnalysisId(newId);
         }
+
         setAnalyses((prev) => {
           const existingIds = new Set(prev.map(p => p.id || p.title));
           const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
@@ -956,26 +963,33 @@ export default function Dashboard() {
         });
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
-        // Background sync to pull latest state from database safely
+        // Background sync to pull latest state from database
         fetchDashboardStateAction().then(res => {
           if (res.success && res.historicalData && res.historicalData.length > 0) {
             setAnalyses(res.historicalData);
           }
         });
+
+        // Close modal smoothly after brief completion delay
+        setTimeout(() => setIsIngestionModalOpen(false), 400);
+
       } else {
         setError("Pipeline Error: " + response.error);
       }
     } catch (err: any) {
       if (err.message === "TIMEOUT_90S" || err.message?.includes("504") || err.message?.includes("timeout")) {
-        setError("The request took too long to complete. Please try analyzing a direct product page link or re-submit.");
+        setError("The request took too long. Please try a direct product page link or re-submit.");
       } else {
-        setError("A fatal error occurred during pipeline execution. " + (err.message || ''));
+        setError("A fatal error occurred: " + (err.message || ''));
       }
     } finally {
       clearInterval(stepInterval);
       setIsLoading(false);
+      setCurrentSkuIndex(0);
+      setTotalSkus(0);
     }
   };
+
 
   const handleDeleteProduct = async (id: string) => {
     const res = await deleteProductAction(id);
@@ -1196,9 +1210,12 @@ export default function Dashboard() {
       <SmartIngestionModal
         isOpen={isIngestionModalOpen}
         onClose={() => setIsIngestionModalOpen(false)}
-        onAnalyze={(urls) => { setIsIngestionModalOpen(false); handleAnalyze(urls); }}
+        onAnalyze={(urls) => { handleAnalyze(urls); }}
         isLoading={isLoading}
         loadingStep={activeStep}
+        currentSkuIndex={currentSkuIndex}
+        totalSkus={totalSkus}
+        availableCredits={userState?.credits ?? 50}
       />
 
       <SettingsManagerModal
