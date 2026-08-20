@@ -10,6 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import KPICards from '@/components/KPICards';
 import RiskRadar from '@/components/RiskRadar';
 import ExecutiveConsole from '@/components/ExecutiveConsole';
+import SmartIngestionModal from '@/components/SmartIngestionModal';
 
 // --- Types ---
 type HealthStatus = 'safe' | 'warning' | 'critical';
@@ -251,7 +252,9 @@ function HistoricalTable({
   onDeleteProduct, 
   onClearAll,
   activeAnalysisId,
-  onInspectRadar
+  onInspectRadar,
+  marketplaceFilter = 'all',
+  onMarketplaceFilterChange
 }: { 
   data: AnalyzedProductSummary[]; 
   onSelectProduct: (product: AnalyzedProductSummary) => void; 
@@ -259,12 +262,14 @@ function HistoricalTable({
   onClearAll: () => void;
   activeAnalysisId?: string | null;
   onInspectRadar?: (productId: string) => void;
+  marketplaceFilter?: 'all' | 'flipkart' | 'meesho';
+  onMarketplaceFilterChange?: (f: 'all' | 'flipkart' | 'meesho') => void;
 }) {
   const [searchTerm, setSearchTerm] = useState('');
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-4 mt-8">
+      <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-12 flex flex-col items-center justify-center text-center gap-4">
         <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
           <svg className="w-8 h-8 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -276,38 +281,59 @@ function HistoricalTable({
     );
   }
 
-  const filteredData = data.filter(item => 
+  const marketplaceFiltered = marketplaceFilter === 'all' ? data : data.filter(item => item.platform === marketplaceFilter);
+  const filteredData = marketplaceFiltered.filter(item =>
     item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.intelligence?.category || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-6 mt-8">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-4 h-full">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-white">Historical Catalog Analysis</h2>
-          <p className="text-sm text-neutral-400 mt-1">Review past AI reports, inspect defect radars, and monitor listing performance.</p>
+          <h2 className="text-base font-bold text-white">Historical Catalog</h2>
+          <p className="text-xs text-neutral-400 mt-0.5">Select a row to sync the live Defect Radar →</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input 
-              type="text" 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search SKUs..." 
-              className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" 
-            />
-          </div>
-          <button onClick={onClearAll} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            Clear All History
-          </button>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['all', 'flipkart', 'meesho'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => onMarketplaceFilterChange?.(f)}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                marketplaceFilter === f
+                  ? f === 'flipkart' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                    : f === 'meesho' ? 'bg-pink-500/20 text-pink-300 border-pink-500/40'
+                    : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                  : 'bg-white/5 text-neutral-400 border-white/10 hover:border-white/20'
+              }`}
+            >
+              {f === 'all' ? 'All Platforms' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[160px]">
+          <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search SKUs..."
+            className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+        <button onClick={onClearAll} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          Clear All
+        </button>
+      </div>
+
 
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm text-neutral-400">
@@ -866,6 +892,8 @@ export default function Dashboard() {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [userState, setUserState] = useState<any>(null);
+  const [isIngestionModalOpen, setIsIngestionModalOpen] = useState(false);
+  const [marketplaceFilter, setMarketplaceFilter] = useState<'all' | 'flipkart' | 'meesho'>('all');
 
   const activeProduct = analyses.find(a => 
     (a.id && a.id === activeAnalysisId) || 
@@ -1002,11 +1030,19 @@ export default function Dashboard() {
             <span className="text-lg font-bold tracking-tight text-white hidden sm:block">ReviewLens Intelligence</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button onClick={loadDemoData} className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded-lg text-sm font-semibold transition-colors">
-              ⚡ Load Demo Data
+          <div className="flex items-center gap-3">
+            {/* Primary CTA */}
+            <button
+              id="run-ai-audit-btn"
+              onClick={() => setIsIngestionModalOpen(true)}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.35)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] disabled:opacity-60 disabled:shadow-none"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              <span className="hidden sm:inline">Run AI Product Audit</span>
+              <span className="sm:hidden">Audit</span>
             </button>
-            
+
             <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
               <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - analyses.length)}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
@@ -1043,10 +1079,11 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-7xl px-4 sm:px-6 py-8 flex flex-col gap-8 relative">
+      <main className="container mx-auto max-w-7xl px-4 sm:px-6 py-8 flex flex-col gap-6 relative">
+        {/* Page title */}
         <header>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">Executive Dashboard</h1>
-          <p className="text-neutral-400">Monitor your catalog health, trigger AI analyses, and recover margin.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white mb-1">Command Center</h1>
+          <p className="text-neutral-400 text-sm">Enterprise catalog intelligence — real-time defect monitoring &amp; margin recovery.</p>
         </header>
 
         {error && (
@@ -1056,53 +1093,117 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* 1. KPI Metrics */}
-        <KPICards data={analyses} />
-
+        {/* Pipeline loader */}
         {isLoading && (
-          <div className="w-full mb-6">
+          <div className="w-full">
             <MultiStepPipelineLoader activeStep={activeStep} />
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* 2. Bulk Product Ingestion Card */}
-          <div className="lg:col-span-2">
-            <IngestionCard onAnalyze={handleAnalyze} isLoading={isLoading} />
-          </div>
+        {/* KPI Portfolio Bar */}
+        <KPICards data={analyses} />
 
-          {/* 3. Priority-sorted Risk Radar */}
-          <div className="lg:col-span-3">
-            <RiskRadar 
-              results={analyses} 
-              activeProduct={activeProduct}
-              onSelectProduct={setSelectedProduct} 
-              onSwitchActiveProduct={(id) => setActiveAnalysisId(id)}
-            />
+        {/* Onboarding Hero — shown only when user has 0 SKUs */}
+        {analyses.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center text-center gap-6 py-20 bg-white/[0.02] border border-white/10 rounded-2xl">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                <svg className="w-10 h-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-indigo-500 animate-ping" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white mb-2">Your Intelligence Console Awaits</h2>
+              <p className="text-neutral-400 text-sm max-w-md">Audit your first Flipkart or Meesho product URL to unlock defect radars, vernacular live feeds, and capital bleed prevention.</p>
+            </div>
+            <button
+              onClick={() => setIsIngestionModalOpen(true)}
+              className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-base transition-all shadow-[0_0_30px_rgba(79,70,229,0.4)] hover:shadow-[0_0_40px_rgba(79,70,229,0.6)]"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              Audit Your First Product
+            </button>
+            <button onClick={loadDemoData} className="text-xs text-neutral-500 hover:text-indigo-400 transition-colors underline underline-offset-2">
+              Or preview with demo data →
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* 4. Historical Table */}
-        <HistoricalTable 
-          data={analyses} 
-          onSelectProduct={setSelectedProduct} 
-          onDeleteProduct={handleDeleteProduct}
-          onClearAll={handleClearAll}
-          activeAnalysisId={activeAnalysisId}
-          onInspectRadar={(id) => setActiveAnalysisId(id)}
-        />
+        {/* Split-Pane Command Center — shown only when user has SKUs */}
+        {analyses.length > 0 && (
+          <div className="flex flex-col xl:flex-row gap-6" style={{ minHeight: '520px' }}>
+            {/* LEFT PANE: Historical Catalog Table (60%) */}
+            <div className="flex-1 xl:w-[60%] min-w-0">
+              <HistoricalTable
+                data={analyses}
+                onSelectProduct={setSelectedProduct}
+                onDeleteProduct={handleDeleteProduct}
+                onClearAll={handleClearAll}
+                activeAnalysisId={activeAnalysisId}
+                onInspectRadar={(id) => setActiveAnalysisId(id)}
+                marketplaceFilter={marketplaceFilter}
+                onMarketplaceFilterChange={setMarketplaceFilter}
+              />
+            </div>
+
+            {/* RIGHT PANE: Live Defect Radar + Vernacular Feed (40%) */}
+            <div className="xl:w-[40%] shrink-0 flex flex-col gap-5">
+              <RiskRadar
+                results={analyses}
+                activeProduct={activeProduct}
+                onSelectProduct={setSelectedProduct}
+                onSwitchActiveProduct={(id) => setActiveAnalysisId(id)}
+              />
+
+              {/* Vernacular Live Feed */}
+              {activeProduct?.intelligence?.vernacularDecoder && activeProduct.intelligence.vernacularDecoder.length > 0 && (
+                <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <h3 className="text-sm font-bold text-white">Vernacular Live Feed</h3>
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+                      {activeProduct.platform.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
+                    {activeProduct.intelligence.vernacularDecoder.slice(0, 5).map((v: any, i: number) => (
+                      <div key={i} className="bg-black/30 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{v.businessImpactCategory || 'Quality'}</span>
+                          <span className="text-[10px] text-neutral-500">{v.detectedLanguage || 'Hinglish'}</span>
+                        </div>
+                        <p className="text-xs text-neutral-200 font-serif italic leading-relaxed">&ldquo;{v.rawVernacularText || v.originalTerm}&rdquo;</p>
+                        <p className="text-[10px] text-emerald-400 font-mono">{v.englishMeaning}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
       {selectedProduct && (
-        <ExecutiveIntelligenceConsoleModal 
-          product={selectedProduct} 
-          onClose={() => setSelectedProduct(null)} 
+        <ExecutiveIntelligenceConsoleModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
         />
       )}
 
-      <SettingsManagerModal 
-        isOpen={isSettingsModalOpen} 
-        onClose={() => setIsSettingsModalOpen(false)} 
+      <SmartIngestionModal
+        isOpen={isIngestionModalOpen}
+        onClose={() => setIsIngestionModalOpen(false)}
+        onAnalyze={(urls) => { setIsIngestionModalOpen(false); handleAnalyze(urls); }}
+        isLoading={isLoading}
+        loadingStep={activeStep}
+      />
+
+      <SettingsManagerModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
         userState={userState}
         historicalData={analyses}
         onUpdate={(updates) => setUserState((prev: any) => ({ ...prev, ...updates }))}

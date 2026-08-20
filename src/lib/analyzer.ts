@@ -58,7 +58,11 @@ function chunkReviews<T>(items: T[], chunkSize: number): T[][] {
 }
 
 function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews: ReviewPayload[]): DefectCluster[] {
-  const rawQuotes = reviews.map(r => r.content).filter(Boolean);
+  // Use ONLY real extracted review content — never fabricate quotes
+  const rawQuotes = reviews.map(r => r.content).filter(c => c && c.trim().length > 5);
+
+  const getQuotes = (start: number, end: number): string[] =>
+    rawQuotes.length >= end ? rawQuotes.slice(start, end) : rawQuotes.slice(0, 1);
 
   return [
     {
@@ -66,10 +70,7 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
       title: "Material & Structural Integrity",
       sharePercentage: 42,
       severity: "Critical",
-      vernacularQuotes: rawQuotes.length >= 2 ? rawQuotes.slice(0, 2) : [
-        reviews[0]?.content || "Quality discrepancy reported in physical product build.",
-        "Component tolerance is lower than expected based on listing images."
-      ],
+      vernacularQuotes: getQuotes(0, 2),
       rootCauseDiagnostic: `Structural stress analysis indicates manufacturing quality or raw material grade discrepancies for "${productTitle}".`,
       factoryFixAction: `Audit supplier batch quality and reinforce component manufacturing tolerances for ${productTitle}.`,
       listingGapAlert: `Ensure listing copy and carousel graphics accurately reflect physical specifications of ${productTitle}.`,
@@ -83,11 +84,8 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
       title: "Specification & Dimensional Discrepancy",
       sharePercentage: 33,
       severity: "High",
-      vernacularQuotes: rawQuotes.length >= 4 ? rawQuotes.slice(2, 4) : [
-        "Sizing and dimensional specs differ slightly from catalog gallery.",
-        "Product fit requires alignment for regular daily usage."
-      ],
-      rootCauseDiagnostic: `Listing specification mismatch between catalog imagery graphics and physical batch delivery for "${productTitle}".`,
+      vernacularQuotes: getQuotes(2, 4),
+      rootCauseDiagnostic: `Listing specification mismatch between catalog imagery and physical batch delivery for "${productTitle}".`,
       factoryFixAction: `Update factory calibration and quality check jigs to enforce dimensional accuracy.`,
       listingGapAlert: `Add accurate dimension infographics and sizing guides to product gallery to prevent fit returns.`,
       category: "Catalog Spec Discrepancy",
@@ -100,9 +98,7 @@ function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews:
       title: "Packaging & Transit Protection",
       sharePercentage: 25,
       severity: "Moderate",
-      vernacularQuotes: rawQuotes.length >= 5 ? rawQuotes.slice(4, 5) : [
-        "Packaging outer box showed transit compression on arrival."
-      ],
+      vernacularQuotes: getQuotes(4, 5),
       rootCauseDiagnostic: `Transit stress during fulfillment causing outer box compression and minor cosmetic blemishes.`,
       factoryFixAction: `Implement 3-ply corrugated bubble cushion inner protection for all fulfillment shipments.`,
       listingGapAlert: `Highlight protective transit packaging seal in customer delivery notes.`,
@@ -237,19 +233,19 @@ Return raw JSON ONLY matching this schema:
     }
   }
 
-  // Fallback if Gemini fails or API key missing
+  // Fallback if Gemini fails — use only real extracted review quotes, no fabricated text
   const fallbackClusters = generateCategoryAgnosticFallbackClusters(productTitle, batch);
   return {
     deducedCategory: "General Catalog",
     defectClusters: fallbackClusters,
     vernacularDecodes: batch.length > 0 ? batch.slice(0, 3).map(r => ({
       context: r.content,
-      originalTerm: "Quality Discrepancy",
-      englishMeaning: "Product quality below buyer expectation",
+      originalTerm: r.content.split(' ').slice(0, 4).join(' '),
+      englishMeaning: "Customer feedback requiring QA review",
       rawVernacularText: r.content,
-      detectedLanguage: "English / Regional",
-      decodedIntent: "Customer return risk",
-      businessImpactCategory: "Refund Claim"
+      detectedLanguage: "Hinglish / English",
+      decodedIntent: "Customer return risk signal",
+      businessImpactCategory: r.rating <= 2 ? "Refund Claim" : "Quality Feedback"
     })) : [],
     sentimentSummary: {
       negativeCount: batch.filter(r => r.rating <= 2).length,
@@ -355,18 +351,14 @@ export async function executeMapReduceAnalysis(
         businessImpactCategory: "Refund Claim"
       })) : []);
 
+  // Only use AI-generated competitor radar — no static fallback brands
   const competitorRadar = aiCompetitorRadar || {
     industryBenchmarkRisk: 16.5,
     yourReturnRisk: weightedReturnRiskScore,
-    categoryRank: "#12 in Category SKUs",
-    competitors: [
-      { name: "Top Category Benchmark 1", benchmarkRisk: 10.5, reviewsCount: 420, advantage: "High-grade material specs & quality assurance certifications" },
-      { name: "Top Category Benchmark 2", benchmarkRisk: 14.0, reviewsCount: 310, advantage: "Accurate dimensional infographics in secondary gallery" },
-      { name: "Top Category Benchmark 3", benchmarkRisk: 16.2, reviewsCount: 250, advantage: "Pre-dispatch protective packaging and rapid warranty support" }
-    ],
+    categoryRank: "Calculating...",
+    competitors: [],
     keyTakeaways: [
-      "Category market leaders utilize clear specification infographics in product galleries to align buyer expectations.",
-      "Top listings provide clear QA certification badges to resolve quality concerns before returns are initiated."
+      "Run analysis to generate category-specific Indian competitor benchmarks via Gemini AI."
     ]
   };
 

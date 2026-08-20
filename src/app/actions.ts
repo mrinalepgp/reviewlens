@@ -491,13 +491,11 @@ export async function deleteProductAction(productId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const { error } = await supabase
-      .from('tracked_products')
-      .delete()
-      .eq('id', productId)
-      .eq('user_id', user.id);
+    // Delete from primary analyses table
+    await supabase.from('analyses').delete().eq('id', productId).eq('user_id', user.id);
+    // Also delete from legacy tracked_products
+    await supabase.from('tracked_products').delete().eq('id', productId).eq('user_id', user.id);
 
-    if (error) throw error;
     return { success: true };
   } catch (err: any) {
     console.error("[Action] Failed to delete product:", err);
@@ -511,12 +509,10 @@ export async function clearAllHistoryAction() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    const { error } = await supabase
-      .from('tracked_products')
-      .delete()
-      .eq('user_id', user.id);
+    // Clear from both tables
+    await supabase.from('analyses').delete().eq('user_id', user.id);
+    await supabase.from('tracked_products').delete().eq('user_id', user.id);
 
-    if (error) throw error;
     return { success: true };
   } catch (err: any) {
     console.error("[Action] Failed to clear history:", err);
