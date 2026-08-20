@@ -152,9 +152,9 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
       </div>
 
       {/* Bubble Chart Canvas */}
-      <div className="relative min-h-[140px] flex-1 bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center gap-3 overflow-hidden">
+      <div className="relative min-h-[140px] flex-1 bg-black/40 border border-white/5 rounded-xl p-4 flex items-center justify-center overflow-hidden">
         {/* Background Grid Lines */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
 
         {bubbleClusters.length === 0 ? (
           <div className="flex flex-col items-center justify-center text-center gap-2 z-10 p-4">
@@ -167,9 +167,9 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
             </p>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-center gap-3 z-10 w-full p-1 overflow-y-auto max-h-full scrollbar-thin">
+          <div className="flex flex-wrap items-center justify-center content-center gap-4 sm:gap-5 z-10 w-full h-full p-2 overflow-y-auto max-h-full scrollbar-thin">
             {bubbleClusters.map((bubble, idx) => {
-              const sizePx = Math.min(100, Math.max(70, 60 + bubble.sharePercentage * 0.8));
+              const sizePx = Math.min(115, Math.max(78, 68 + bubble.sharePercentage * 0.9));
               
               return (
                 <div
@@ -180,16 +180,16 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
                     height: `${sizePx}px`,
                     boxShadow: `0 0 25px ${bubble.glowColor}`
                   }}
-                  className={`rounded-full bg-gradient-to-br ${bubble.colorClass} border-2 flex flex-col items-center justify-center p-3 text-center cursor-pointer transition-all duration-300 hover:scale-110 hover:z-20 relative group shadow-xl animate-in fade-in duration-300`}
+                  className={`rounded-full bg-gradient-to-br ${bubble.colorClass} border-2 flex flex-col items-center justify-center p-2.5 text-center cursor-pointer transition-all duration-300 hover:scale-110 hover:z-20 relative group shadow-xl animate-in fade-in duration-300 shrink-0`}
                 >
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider opacity-90 mb-0.5">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-90 mb-0.5">
                     {bubble.sharePercentage}% Share
                   </span>
-                  <span className="text-xs font-bold text-white line-clamp-2 leading-tight drop-shadow-md">
+                  <span className="text-[11px] font-bold text-white line-clamp-2 leading-tight drop-shadow-md">
                     {bubble.title}
                   </span>
-                  <span className="text-[9px] text-neutral-300 font-mono mt-1 opacity-70 group-hover:opacity-100">
-                    Inspect Diagnostic →
+                  <span className="text-[8px] text-neutral-300 font-mono mt-0.5 opacity-70 group-hover:opacity-100 hidden sm:block">
+                    Inspect →
                   </span>
                 </div>
               );

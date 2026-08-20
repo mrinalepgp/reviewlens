@@ -1,6 +1,40 @@
 import { ReviewPayload, Marketplace, EnterpriseIntelligence } from './scraper';
 import { cleanAndParseJSON } from './ai';
 
+export function sanitizeCustomerQuote(text: string, productTitle?: string): string {
+  if (!text) return "";
+  let cleaned = text.trim();
+
+  // Strip leading & trailing quotation marks, quotes, brackets
+  cleaned = cleaned.replace(/^["'“`\[\s]+|["'”`\]\s]+$/g, '');
+
+  // If product title is provided, strip exact product title or leading product keywords
+  if (productTitle && productTitle.length > 3) {
+    const escapedTitle = productTitle.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(escapedTitle, 'gi'), '');
+
+    // Strip leading words if they match product title tokens
+    const titleTokens = productTitle.split(/\s+/).filter(t => t.length > 3);
+    if (titleTokens.length >= 2) {
+      const prefixPattern = titleTokens.slice(0, 3).map(t => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).join('\\s+');
+      cleaned = cleaned.replace(new RegExp('^' + prefixPattern + '[:\\,\\-\\s]*', 'gi'), '');
+    }
+  }
+
+  // Strip leading marketplace share string prefix noise
+  cleaned = cleaned.replace(/^(check this out on flipkart|check out this product|flipkart|meesho|product|item|title|review)[:\-\s]*/gi, '');
+
+  // Strip multiple spaces
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+  // Capitalize first character
+  if (cleaned.length > 0) {
+    cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return cleaned;
+}
+
 export interface DefectCluster {
   id: string;
   title: string;
@@ -59,7 +93,7 @@ function chunkReviews<T>(items: T[], chunkSize: number): T[][] {
 
 function generateCategoryAgnosticFallbackClusters(productTitle: string, reviews: ReviewPayload[]): DefectCluster[] {
   // Use ONLY real extracted review content — never fabricate quotes
-  const rawQuotes = reviews.map(r => r.content).filter(c => c && c.trim().length > 5);
+  const rawQuotes = reviews.map(r => sanitizeCustomerQuote(r.content, productTitle)).filter(c => c && c.trim().length > 5);
 
   const getQuotes = (start: number, end: number): string[] =>
     rawQuotes.length >= end ? rawQuotes.slice(start, end) : rawQuotes.slice(0, 1);
@@ -119,7 +153,7 @@ async function mapReviewChunk(
 ): Promise<MapBatchResult> {
   console.log(`[Map-Reduce AI Engine] Executing MAP step for Batch #${batchIndex + 1} (${batch.length} reviews for "${productTitle}")...`);
   
-  const payloadSnippet = batch.map((r, i) => `[${i+1}] Rating: ${r.rating}★ | Content: "${r.content}"`).join('\n');
+  const payloadSnippet = batch.map((r, i) => `[${i+1}] Rating: ${r.rating}★ | Content: "${sanitizeCustomerQuote(r.content, productTitle)}"`).join('\n');
   
   const modelCandidates = ["gemini-1.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"];
   const promptText = `
@@ -131,9 +165,10 @@ CUSTOMER REVIEWS AUDITED:
 ${payloadSnippet}
 
 DYNAMIC AI INSTRUCTIONS (100% CATEGORY-AGNOSTIC):
-1. Automatically deduce the exact micro-category of "${productTitle}" from its title and review context (e.g., 'Women's Ethnic Wear / Kurti', 'Eyewear / Polarized Sunglasses', 'Audio & Wearables / TWS Earbuds', 'Home Appliances', 'Footwear', 'Personal Care', etc.).
-2. Dynamically infer the Top 3 Indian market leader benchmark brands strictly for that deduced micro-category (e.g. Ray-Ban/Vincent Chase/Fastrack for Eyewear, Libas/Janasya/Anouk for Kurtis, boAt/Noise/Boult for Earbuds, Philips/Havells for Appliances, etc.).
+1. Automatically deduce the exact micro-category of "${productTitle}" from its title and review context.
+2. Dynamically infer the Top 3 Indian market leader benchmark brands strictly for that deduced micro-category.
 3. Extract 3 to 5 comprehensive, product-specific defect clusters, root cause diagnostics, factory fix actions, listing gap alerts, and native vernacular/Hinglish phrase decodes strictly tailored to this product and its category. Never output cross-domain terms!
+4. CRITICAL VERNACULAR QUOTE RULE: In 'rawVernacularText' and 'context', strip out redundant long product keyword titles so the quote reads naturally as authentic customer voice (e.g. 'Fabric is very thin (low GSM). Color bled heavily in first hand wash...'). Never include full product titles or catalog SEO noise inside quotes!
 
 Return raw JSON ONLY matching this schema:
 {
@@ -157,7 +192,7 @@ Return raw JSON ONLY matching this schema:
       "context": "Review excerpt context",
       "originalTerm": "Vernacular term extracted from review (e.g. Kharab build / Size chota / Sound drop)",
       "englishMeaning": "English translation of vernacular term",
-      "rawVernacularText": "Raw customer quote text",
+      "rawVernacularText": "Authentic customer quote snippet with product title/SEO noise stripped out (e.g., 'Fabric is very thin (low GSM). Color bled heavily in first hand wash...')",
       "detectedLanguage": "Hinglish / Regional",
       "decodedIntent": "Decoded intent / underlying defect cause",
       "businessImpactCategory": "Quality Defect / Sizing Mismatch / Refund Claim"
@@ -223,7 +258,11 @@ Return raw JSON ONLY matching this schema:
         return {
           deducedCategory: parsed.deducedCategory || "General Catalog",
           defectClusters: clusters,
-          vernacularDecodes: parsed.vernacularDecodes || [],
+          vernacularDecodes: (parsed.vernacularDecodes || []).map((v: any) => ({
+            ...v,
+            rawVernacularText: sanitizeCustomerQuote(v.rawVernacularText || v.context || v.originalTerm, productTitle),
+            context: sanitizeCustomerQuote(v.context || v.rawVernacularText, productTitle)
+          })),
           competitorRadar: parsed.competitorRadar,
           sentimentSummary: parsed.sentimentSummary || { negativeCount: 0, neutralCount: 0, positiveCount: 0, avgRating: 3.5 }
         };
@@ -239,10 +278,10 @@ Return raw JSON ONLY matching this schema:
     deducedCategory: "General Catalog",
     defectClusters: fallbackClusters,
     vernacularDecodes: batch.length > 0 ? batch.slice(0, 3).map(r => ({
-      context: r.content,
+      context: sanitizeCustomerQuote(r.content, productTitle),
       originalTerm: r.content.split(' ').slice(0, 4).join(' '),
       englishMeaning: "Customer feedback requiring QA review",
-      rawVernacularText: r.content,
+      rawVernacularText: sanitizeCustomerQuote(r.content, productTitle),
       detectedLanguage: "Hinglish / English",
       decodedIntent: "Customer return risk signal",
       businessImpactCategory: r.rating <= 2 ? "Refund Claim" : "Quality Feedback"

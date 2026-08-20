@@ -11,6 +11,7 @@ import KPICards from '@/components/KPICards';
 import RiskRadar from '@/components/RiskRadar';
 import ExecutiveConsole from '@/components/ExecutiveConsole';
 import SmartIngestionModal from '@/components/SmartIngestionModal';
+import { sanitizeCustomerQuote } from '@/lib/analyzer';
 
 // --- Types ---
 type HealthStatus = 'safe' | 'warning' | 'critical';
@@ -1202,7 +1203,7 @@ export default function Dashboard() {
                           <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{v.businessImpactCategory || 'Quality'}</span>
                           <span className="text-[9px] text-neutral-500">{v.detectedLanguage || 'Hinglish'}</span>
                         </div>
-                        <p className="text-xs text-neutral-200 font-serif italic leading-snug">&ldquo;{v.rawVernacularText || v.originalTerm}&rdquo;</p>
+                        <p className="text-xs text-neutral-200 font-serif italic leading-snug">&ldquo;{sanitizeCustomerQuote(v.rawVernacularText || v.originalTerm, activeProduct?.title)}&rdquo;</p>
                         <p className="text-[10px] text-emerald-400 font-mono">{v.englishMeaning}</p>
                       </div>
                     ))}

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { exportSupplierAuditPDF } from '@/lib/pdfExport';
 import { AnalyzedProductSummary } from '@/app/actions';
+import { sanitizeCustomerQuote } from '@/lib/analyzer';
 
 export default function ExecutiveConsole({
   product,
@@ -371,7 +372,7 @@ export default function ExecutiveConsole({
                         </h5>
 
                         <p className="text-xs text-neutral-300 italic bg-white/[0.03] p-3 rounded-lg border border-white/5 font-serif">
-                          "{item.context || item.rawVernacularText}"
+                          &ldquo;{sanitizeCustomerQuote(item.context || item.rawVernacularText, product.title)}&rdquo;
                         </p>
 
                         {item.decodedIntent && (
