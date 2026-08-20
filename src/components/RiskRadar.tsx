@@ -110,40 +110,40 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
   };
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-6 h-full shadow-2xl relative overflow-hidden">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-2.5 h-full min-h-0 flex-1 shadow-2xl relative overflow-hidden">
       {/* Header with SKU Switcher */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2 shrink-0">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold text-white">Interactive Defect Cluster Radar</h2>
+            <h2 className="text-xs font-bold text-white uppercase tracking-wider">Defect Cluster Radar</h2>
             {activeProduct ? (
-              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
-                Active: {activeProduct.platform.toUpperCase()}
+              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
+                {activeProduct.platform.toUpperCase()}
               </span>
             ) : (
-              <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 uppercase tracking-wider">
+              <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-wider">
                 Gemini Vernacular Engine
               </span>
             )}
           </div>
-          <p className="text-xs text-neutral-400 mt-1 max-w-md truncate">
+          <p className="text-[10px] text-neutral-400 mt-0.5 max-w-xs truncate">
             {activeProduct 
-              ? `Mapping vernacular defect clusters for "${activeProduct.title}"`
-              : 'Awaiting product selection to map live vernacular defect clusters...'}
+              ? `Mapping clusters for "${activeProduct.title}"`
+              : 'Select product to map live clusters'}
           </p>
         </div>
 
         {results && results.length > 1 && (
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-neutral-400">Target SKU:</label>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <label className="text-[10px] font-semibold text-neutral-400">SKU:</label>
             <select
               value={activeProduct?.id || activeProduct?.url || ''}
               onChange={(e) => onSwitchActiveProduct?.(e.target.value)}
-              className="bg-black/60 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+              className="bg-black/60 border border-white/15 rounded-lg px-2 py-1 text-[10px] text-white focus:outline-none focus:border-indigo-500 font-medium max-w-[140px] truncate"
             >
               {results.map((p, pIdx) => (
                 <option key={p.id || p.url || pIdx} value={p.id || p.url || ''} className="bg-neutral-900 text-white">
-                  {p.title.substring(0, 26)}{p.title.length > 26 ? '...' : ''} ({p.platform.toUpperCase()})
+                  {p.title.substring(0, 20)}{p.title.length > 20 ? '...' : ''} ({p.platform.toUpperCase()})
                 </option>
               ))}
             </select>
@@ -152,24 +152,24 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
       </div>
 
       {/* Bubble Chart Canvas */}
-      <div className="relative min-h-[340px] bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col items-center justify-center gap-6 overflow-hidden flex-grow">
+      <div className="relative min-h-[140px] flex-1 bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center gap-3 overflow-hidden">
         {/* Background Grid Lines */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"></div>
 
         {bubbleClusters.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center gap-3 z-10 p-6">
-            <div className="w-14 h-14 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center relative">
-              <span className="w-3 h-3 rounded-full bg-indigo-400 animate-ping absolute"></span>
-              <span className="w-3 h-3 rounded-full bg-indigo-500 relative"></span>
+          <div className="flex flex-col items-center justify-center text-center gap-2 z-10 p-4">
+            <div className="w-10 h-10 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center relative">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping absolute"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 relative"></span>
             </div>
-            <p className="text-sm font-medium text-neutral-400 max-w-sm">
+            <p className="text-xs font-medium text-neutral-400 max-w-xs">
               Awaiting product URL to map live vernacular defect clusters...
             </p>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center justify-center gap-6 z-10 w-full p-2">
+          <div className="flex flex-wrap items-center justify-center gap-3 z-10 w-full p-1 overflow-y-auto max-h-full scrollbar-thin">
             {bubbleClusters.map((bubble, idx) => {
-              const sizePx = Math.min(155, Math.max(105, 85 + bubble.sharePercentage * 1.5));
+              const sizePx = Math.min(100, Math.max(70, 60 + bubble.sharePercentage * 0.8));
               
               return (
                 <div

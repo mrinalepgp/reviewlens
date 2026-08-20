@@ -289,19 +289,19 @@ function HistoricalTable({
   );
 
   return (
-    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-4 h-full">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-3.5 flex flex-col gap-2.5 h-full min-h-0 overflow-hidden">
+      <div className="flex items-center justify-between shrink-0 gap-2">
         <div>
-          <h2 className="text-base font-bold text-white">Historical Catalog</h2>
-          <p className="text-xs text-neutral-400 mt-0.5">Select a row to sync the live Defect Radar →</p>
+          <h2 className="text-xs font-bold text-white uppercase tracking-wider">Historical Catalog</h2>
+          <p className="text-[10px] text-neutral-400">Click row to sync Defect Radar →</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 shrink-0">
           {(['all', 'flipkart', 'meesho'] as const).map(f => (
             <button
               key={f}
               onClick={() => onMarketplaceFilterChange?.(f)}
-              className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
                 marketplaceFilter === f
                   ? f === 'flipkart' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
                     : f === 'meesho' ? 'bg-pink-500/20 text-pink-300 border-pink-500/40'
@@ -309,15 +309,15 @@ function HistoricalTable({
                   : 'bg-white/5 text-neutral-400 border-white/10 hover:border-white/20'
               }`}
             >
-              {f === 'all' ? 'All Platforms' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[160px]">
-          <svg className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="relative flex-1 min-w-[140px]">
+          <svg className="w-3.5 h-3.5 absolute left-2.5 top-2 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -325,18 +325,17 @@ function HistoricalTable({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search SKUs..."
-            className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+            className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-1 text-xs text-white focus:outline-none focus:border-indigo-500"
           />
         </div>
-        <button onClick={onClearAll} className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0">
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          Clear All
+        <button onClick={onClearAll} className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1 shrink-0">
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          Clear
         </button>
       </div>
 
-
-      {/* No overflow-x wrapper — table-fixed keeps everything in the left pane */}
-      <div className="w-full min-w-0 overflow-hidden">
+      {/* Internal scrollable table wrapper */}
+      <div className="w-full min-w-0 flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-0.5">
         <table className="w-full table-fixed text-left text-sm text-neutral-400">
           <colgroup>
             <col style={{ width: '42%' }} />
@@ -345,13 +344,13 @@ function HistoricalTable({
             <col style={{ width: '14%' }} />
             <col style={{ width: '12%' }} />
           </colgroup>
-          <thead className="text-[10px] uppercase bg-white/5 border-y border-white/10 text-neutral-400 tracking-wider">
+          <thead className="text-[10px] uppercase bg-neutral-950/90 backdrop-blur-sm sticky top-0 z-10 border-b border-white/10 text-neutral-400 tracking-wider">
             <tr>
-              <th className="px-3 py-2.5 font-semibold text-left">Product</th>
-              <th className="px-2 py-2.5 font-semibold text-left">Mkt</th>
-              <th className="px-2 py-2.5 font-semibold text-left">Risk</th>
-              <th className="px-2 py-2.5 font-semibold text-left">Capital</th>
-              <th className="px-2 py-2.5 font-semibold text-right">Action</th>
+              <th className="px-3 py-2 font-semibold text-left">Product</th>
+              <th className="px-2 py-2 font-semibold text-left">Mkt</th>
+              <th className="px-2 py-2 font-semibold text-left">Risk</th>
+              <th className="px-2 py-2 font-semibold text-left">Capital</th>
+              <th className="px-2 py-2 font-semibold text-right">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -372,7 +371,7 @@ function HistoricalTable({
                   }`}
                 >
                   {/* Title — constrained, truncates */}
-                  <td className="px-3 py-2.5 min-w-0">
+                  <td className="px-3 py-2 min-w-0">
                     <div className="flex flex-col gap-0.5 min-w-0">
                       <div className="flex items-center gap-1.5 min-w-0">
                         {isActive && (
@@ -394,7 +393,7 @@ function HistoricalTable({
                   </td>
 
                   {/* Platform badge */}
-                  <td className="px-2 py-2.5">
+                  <td className="px-2 py-2">
                     <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
                       item.platform === 'flipkart'
                         ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
@@ -405,7 +404,7 @@ function HistoricalTable({
                   </td>
 
                   {/* Risk */}
-                  <td className="px-2 py-2.5">
+                  <td className="px-2 py-2">
                     <div className="flex items-center gap-1">
                       <RiskBadge status={item.riskAssessment} />
                       <span className="text-[10px] font-mono font-bold text-neutral-300 shrink-0">
@@ -415,12 +414,12 @@ function HistoricalTable({
                   </td>
 
                   {/* Capital Protected */}
-                  <td className="px-2 py-2.5 font-mono text-[10px] font-bold text-emerald-400">
+                  <td className="px-2 py-2 font-mono text-[10px] font-bold text-emerald-400">
                     ₹{(item.intelligence?.executiveScorecard?.estimatedCapitalProtected || 0).toLocaleString('en-IN')}
                   </td>
 
                   {/* Action — compact icon buttons */}
-                  <td className="px-2 py-2.5">
+                  <td className="px-2 py-2">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); onSelectProduct(item); }}
@@ -449,13 +448,12 @@ function HistoricalTable({
         </table>
       </div>
 
-      
-      <div className="flex items-center justify-between text-xs text-neutral-500">
+      <div className="flex items-center justify-between text-[10px] text-neutral-500 shrink-0 pt-1 border-t border-white/5">
         <span>Showing 1 to {filteredData.length} of {data.length} entries</span>
         <div className="flex gap-1">
-          <button className="px-2 py-1 border border-white/10 rounded hover:bg-white/5 disabled:opacity-50" disabled>Prev</button>
-          <button className="px-2 py-1 border border-white/10 rounded bg-white/10 text-white">1</button>
-          <button className="px-2 py-1 border border-white/10 rounded hover:bg-white/5 disabled:opacity-50" disabled>Next</button>
+          <button className="px-2 py-0.5 border border-white/10 rounded hover:bg-white/5 disabled:opacity-50" disabled>Prev</button>
+          <button className="px-2 py-0.5 border border-white/10 rounded bg-white/10 text-white">1</button>
+          <button className="px-2 py-0.5 border border-white/10 rounded hover:bg-white/5 disabled:opacity-50" disabled>Next</button>
         </div>
       </div>
     </div>
@@ -1045,14 +1043,14 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-50 selection:bg-indigo-500/30">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-neutral-950/80 backdrop-blur-md">
-        <div className="container mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-xl shadow-[0_0_15px_rgba(79,70,229,0.5)]">
+    <div className="h-screen max-h-screen overflow-hidden flex flex-col bg-neutral-950 text-neutral-50 selection:bg-indigo-500/30">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-neutral-950/80 backdrop-blur-md shrink-0 h-14">
+        <div className="container mx-auto flex h-full max-w-[1600px] items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-base shadow-[0_0_15px_rgba(79,70,229,0.5)]">
               R
             </div>
-            <span className="text-lg font-bold tracking-tight text-white hidden sm:block">ReviewLens Intelligence</span>
+            <span className="text-base font-bold tracking-tight text-white hidden sm:block">ReviewLens Intelligence</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -1061,21 +1059,21 @@ export default function Dashboard() {
               id="run-ai-audit-btn"
               onClick={() => setIsIngestionModalOpen(true)}
               disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.35)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] disabled:opacity-60 disabled:shadow-none"
+              className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.35)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)] disabled:opacity-60 disabled:shadow-none"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">Run AI Product Audit</span>
               <span className="sm:hidden">Audit</span>
             </button>
 
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
               <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - analyses.length)}/50</span>
               <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
             </div>
 
             <div className="relative">
               <button onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} className="flex items-center gap-2 focus:outline-none">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white border border-white/10 shadow-sm">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-xs font-bold text-white border border-white/10 shadow-sm">
                   {getInitials()}
                 </div>
               </button>
@@ -1104,23 +1102,25 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-7xl px-4 sm:px-6 py-8 flex flex-col gap-6 relative">
-        {/* Page title */}
-        <header>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white mb-1">Command Center</h1>
-          <p className="text-neutral-400 text-sm">Enterprise catalog intelligence — real-time defect monitoring &amp; margin recovery.</p>
-        </header>
+      <main className="flex-1 min-h-0 container mx-auto max-w-[1600px] w-full px-4 py-3 flex flex-col gap-2.5 overflow-hidden">
+        {/* Page title & errors */}
+        <div className="shrink-0 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-white">Command Center</h1>
+            <p className="text-[11px] text-neutral-400">Enterprise catalog intelligence &amp; margin recovery</p>
+          </div>
+        </div>
 
         {error && (
-          <div className="w-full rounded-xl p-4 flex items-center justify-between border bg-rose-500/10 border-rose-500/20 text-rose-400">
-            <span className="font-medium text-sm">{error}</span>
-            <button onClick={() => setError(null)} className="text-xs font-semibold px-3 py-1 hover:bg-white/10 rounded transition-colors">Dismiss</button>
+          <div className="shrink-0 w-full rounded-xl p-2.5 flex items-center justify-between border bg-rose-500/10 border-rose-500/20 text-rose-400 text-xs">
+            <span className="font-medium">{error}</span>
+            <button onClick={() => setError(null)} className="text-xs font-semibold px-2 py-0.5 hover:bg-white/10 rounded transition-colors">Dismiss</button>
           </div>
         )}
 
         {/* Pipeline loader */}
         {isLoading && (
-          <div className="w-full">
+          <div className="shrink-0 w-full">
             <MultiStepPipelineLoader activeStep={activeStep} />
           </div>
         )}
@@ -1130,24 +1130,24 @@ export default function Dashboard() {
 
         {/* Onboarding Hero — shown only when user has 0 SKUs */}
         {analyses.length === 0 && !isLoading && (
-          <div className="flex flex-col items-center justify-center text-center gap-6 py-20 bg-white/[0.02] border border-white/10 rounded-2xl">
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center gap-4 py-8 bg-white/[0.02] border border-white/10 rounded-2xl">
             <div className="relative">
-              <div className="w-20 h-20 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
-                <svg className="w-10 h-10 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                <svg className="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-indigo-500 animate-ping" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-indigo-500 animate-ping" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white mb-2">Your Intelligence Console Awaits</h2>
-              <p className="text-neutral-400 text-sm max-w-md">Audit your first Flipkart or Meesho product URL to unlock defect radars, vernacular live feeds, and capital bleed prevention.</p>
+              <h2 className="text-xl font-black text-white mb-1">Your Intelligence Console Awaits</h2>
+              <p className="text-neutral-400 text-xs max-w-md">Audit your first Flipkart or Meesho product URL to unlock defect radars, vernacular live feeds, and capital bleed prevention.</p>
             </div>
             <button
               onClick={() => setIsIngestionModalOpen(true)}
-              className="flex items-center gap-2 px-8 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-base transition-all shadow-[0_0_30px_rgba(79,70,229,0.4)] hover:shadow-[0_0_40px_rgba(79,70,229,0.6)]"
+              className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-sm transition-all shadow-[0_0_25px_rgba(79,70,229,0.4)] hover:shadow-[0_0_35px_rgba(79,70,229,0.6)]"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               Audit Your First Product
             </button>
             <button onClick={loadDemoData} className="text-xs text-neutral-500 hover:text-indigo-400 transition-colors underline underline-offset-2">
@@ -1158,9 +1158,9 @@ export default function Dashboard() {
 
         {/* Split-Pane Command Center — shown only when user has SKUs */}
         {analyses.length > 0 && (
-          <div className="flex flex-col xl:flex-row gap-6" style={{ minHeight: '520px' }}>
-            {/* LEFT PANE: Historical Catalog Table (60%) */}
-            <div className="flex-1 xl:w-[60%] min-w-0">
+          <div className="flex-1 min-h-0 grid grid-cols-12 gap-3">
+            {/* LEFT PANE: Historical Catalog Table (6 cols) */}
+            <div className="col-span-12 lg:col-span-6 xl:col-span-6 flex flex-col min-h-0 h-full">
               <HistoricalTable
                 data={analyses}
                 onSelectProduct={setSelectedProduct}
@@ -1173,37 +1173,44 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* RIGHT PANE: Live Defect Radar + Vernacular Feed (40%) */}
-            <div className="xl:w-[40%] shrink-0 flex flex-col gap-5">
-              <RiskRadar
-                results={analyses}
-                activeProduct={activeProduct}
-                onSelectProduct={setSelectedProduct}
-                onSwitchActiveProduct={(id) => setActiveAnalysisId(id)}
-              />
+            {/* RIGHT PANE: Live Defect Radar + Vernacular Feed (6 cols) */}
+            <div className="col-span-12 lg:col-span-6 xl:col-span-6 flex flex-col min-h-0 h-full gap-2.5">
+              {/* Top 60%: Interactive Defect Cluster Radar */}
+              <div className="flex-[3] min-h-0 flex flex-col">
+                <RiskRadar
+                  results={analyses}
+                  activeProduct={activeProduct}
+                  onSelectProduct={setSelectedProduct}
+                  onSwitchActiveProduct={(id) => setActiveAnalysisId(id)}
+                />
+              </div>
 
-              {/* Vernacular Live Feed */}
-              {activeProduct?.intelligence?.vernacularDecoder && activeProduct.intelligence.vernacularDecoder.length > 0 && (
-                <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <h3 className="text-sm font-bold text-white">Vernacular Live Feed</h3>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+              {/* Bottom 40%: Vernacular Live Feed */}
+              {activeProduct?.intelligence?.vernacularDecoder && activeProduct.intelligence.vernacularDecoder.length > 0 ? (
+                <div className="flex-[2] min-h-0 flex flex-col bg-white/[0.02] border border-white/10 rounded-2xl p-3 overflow-hidden">
+                  <div className="flex items-center gap-2 shrink-0 mb-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Vernacular Live Feed</h3>
+                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase">
                       {activeProduct.platform.toUpperCase()}
                     </span>
                   </div>
-                  <div className="flex flex-col gap-2 max-h-44 overflow-y-auto pr-1">
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin scrollbar-thumb-white/10">
                     {activeProduct.intelligence.vernacularDecoder.slice(0, 5).map((v: any, i: number) => (
-                      <div key={i} className="bg-black/30 border border-white/5 rounded-xl p-3 flex flex-col gap-1">
+                      <div key={i} className="bg-black/30 border border-white/5 rounded-xl p-2.5 flex flex-col gap-0.5 shrink-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{v.businessImpactCategory || 'Quality'}</span>
-                          <span className="text-[10px] text-neutral-500">{v.detectedLanguage || 'Hinglish'}</span>
+                          <span className="text-[9px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">{v.businessImpactCategory || 'Quality'}</span>
+                          <span className="text-[9px] text-neutral-500">{v.detectedLanguage || 'Hinglish'}</span>
                         </div>
-                        <p className="text-xs text-neutral-200 font-serif italic leading-relaxed">&ldquo;{v.rawVernacularText || v.originalTerm}&rdquo;</p>
+                        <p className="text-xs text-neutral-200 font-serif italic leading-snug">&ldquo;{v.rawVernacularText || v.originalTerm}&rdquo;</p>
                         <p className="text-[10px] text-emerald-400 font-mono">{v.englishMeaning}</p>
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="flex-[2] min-h-0 flex items-center justify-center bg-white/[0.02] border border-white/10 rounded-2xl p-3 text-center">
+                  <p className="text-xs text-neutral-500 font-mono">Select a product to stream live buyer vernacular feed…</p>
                 </div>
               )}
             </div>
