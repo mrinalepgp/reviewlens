@@ -238,11 +238,11 @@ function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
 function RiskBadge({ status }: { status: HealthStatus }) {
   switch (status) {
     case 'critical':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full">Critical Risk</span>;
+      return <span className="px-1.5 py-0.5 text-[9px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded whitespace-nowrap">Critical</span>;
     case 'warning':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full">Warning</span>;
+      return <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded whitespace-nowrap">Warning</span>;
     case 'safe':
-      return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full">Optimal</span>;
+      return <span className="px-1.5 py-0.5 text-[9px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded whitespace-nowrap">Optimal</span>;
   }
 }
 
@@ -335,99 +335,109 @@ function HistoricalTable({
       </div>
 
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-neutral-400">
-          <thead className="text-xs uppercase bg-white/5 border-y border-white/10 text-neutral-300">
+      {/* No overflow-x wrapper — table-fixed keeps everything in the left pane */}
+      <div className="w-full min-w-0 overflow-hidden">
+        <table className="w-full table-fixed text-left text-sm text-neutral-400">
+          <colgroup>
+            <col style={{ width: '42%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '14%' }} />
+            <col style={{ width: '12%' }} />
+          </colgroup>
+          <thead className="text-[10px] uppercase bg-white/5 border-y border-white/10 text-neutral-400 tracking-wider">
             <tr>
-              <th className="px-4 py-3 font-semibold">Product Title & Category</th>
-              <th className="px-4 py-3 font-semibold">Platform</th>
-              <th className="px-4 py-3 font-semibold">Return Risk %</th>
-              <th className="px-4 py-3 font-semibold">Capital Protected</th>
-              <th className="px-4 py-3 font-semibold text-right">Action</th>
+              <th className="px-3 py-2.5 font-semibold text-left">Product</th>
+              <th className="px-2 py-2.5 font-semibold text-left">Mkt</th>
+              <th className="px-2 py-2.5 font-semibold text-left">Risk</th>
+              <th className="px-2 py-2.5 font-semibold text-left">Capital</th>
+              <th className="px-2 py-2.5 font-semibold text-right">Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.map((item, idx) => {
               const itemKey = item.id || item.url || item.title || `${idx}`;
-              const isActive = activeAnalysisId 
+              const isActive = activeAnalysisId
                 ? (item.id === activeAnalysisId || item.url === activeAnalysisId || item.title === activeAnalysisId)
                 : (idx === 0);
 
               return (
-                <tr 
-                  key={idx} 
+                <tr
+                  key={idx}
                   onClick={() => onInspectRadar?.(itemKey)}
-                  className={`border-b border-white/5 transition-all cursor-pointer ${
-                    isActive ? 'bg-indigo-500/15 border-l-4 border-l-indigo-500 shadow-sm' : 'hover:bg-white/5'
+                  className={`border-b border-white/5 transition-colors cursor-pointer ${
+                    isActive
+                      ? 'bg-indigo-500/10 border-l-2 border-l-indigo-500'
+                      : 'hover:bg-white/[0.04]'
                   }`}
                 >
-                  <td className="px-4 py-3 font-medium text-neutral-200 max-w-sm">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white truncate max-w-xs">{item.title}</span>
+                  {/* Title — constrained, truncates */}
+                  <td className="px-3 py-2.5 min-w-0">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         {isActive && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0 uppercase tracking-wider">
-                            Active Radar 🎯
-                          </span>
+                          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                         )}
+                        <span
+                          className="text-xs font-semibold text-white truncate block min-w-0"
+                          title={item.title}
+                        >
+                          {item.title}
+                        </span>
                       </div>
                       {item.intelligence?.category && (
-                        <span className="text-[10px] text-emerald-400/90 font-mono uppercase tracking-wider">{item.intelligence.category}</span>
+                        <span className="text-[9px] text-emerald-400/80 font-mono uppercase tracking-wider truncate">
+                          {item.intelligence.category}
+                        </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="text-[10px] font-bold text-indigo-400 bg-indigo-400/10 px-2 py-0.5 rounded border border-indigo-400/20 uppercase">
-                      {item.platform}
+
+                  {/* Platform badge */}
+                  <td className="px-2 py-2.5">
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                      item.platform === 'flipkart'
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        : 'bg-pink-500/10 text-pink-400 border-pink-500/20'
+                    }`}>
+                      {item.platform === 'flipkart' ? 'FK' : 'ME'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
+
+                  {/* Risk */}
+                  <td className="px-2 py-2.5">
+                    <div className="flex items-center gap-1">
                       <RiskBadge status={item.riskAssessment} />
-                      <span className="text-xs font-mono font-bold text-neutral-300">
-                        {item.intelligence?.executiveScorecard?.returnRiskScore ?? '28.5'}%
+                      <span className="text-[10px] font-mono font-bold text-neutral-300 shrink-0">
+                        {item.intelligence?.executiveScorecard?.returnRiskScore ?? '—'}%
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs font-bold text-emerald-400">
-                    ₹{(item.intelligence?.executiveScorecard?.estimatedCapitalProtected || 134850).toLocaleString('en-IN')}
+
+                  {/* Capital Protected */}
+                  <td className="px-2 py-2.5 font-mono text-[10px] font-bold text-emerald-400">
+                    ₹{(item.intelligence?.executiveScorecard?.estimatedCapitalProtected || 0).toLocaleString('en-IN')}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2.5">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onInspectRadar?.(itemKey);
-                        }} 
-                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                          isActive 
-                          ? 'bg-indigo-600 text-white shadow-md' 
-                          : 'bg-white/5 hover:bg-indigo-500/20 text-neutral-300 hover:text-indigo-300 border border-white/10'
-                        }`}
-                      >
-                        {isActive ? 'Active Radar 🎯' : 'Inspect Radar'}
-                      </button>
 
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectProduct(item);
-                        }} 
-                        className="text-indigo-400 hover:text-indigo-300 font-medium text-xs hover:underline"
+                  {/* Action — compact icon buttons */}
+                  <td className="px-2 py-2.5">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onSelectProduct(item); }}
+                        className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 hover:underline whitespace-nowrap"
+                        title="Open Executive Console"
                       >
-                        Console →
+                        Console
                       </button>
-
                       {item.id && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteProduct(item.id!);
-                          }} 
-                          className="text-neutral-500 hover:text-rose-400 transition-colors p-1 ml-1" 
-                          title="Delete Product"
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDeleteProduct(item.id!); }}
+                          className="text-neutral-600 hover:text-rose-400 transition-colors shrink-0"
+                          title="Delete"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                         </button>
                       )}
                     </div>
@@ -438,6 +448,7 @@ function HistoricalTable({
           </tbody>
         </table>
       </div>
+
       
       <div className="flex items-center justify-between text-xs text-neutral-500">
         <span>Showing 1 to {filteredData.length} of {data.length} entries</span>
