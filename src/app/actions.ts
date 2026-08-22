@@ -211,7 +211,8 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             capital_protected: capitalProtected,
             defect_clusters: clusters,
             raw_reviews: scrapeResult.reviews || [],
-            intelligence_data: safeIntelligenceData
+            intelligence_data: safeIntelligenceData,
+            created_at: new Date().toISOString()
           };
 
           const { data: analysisRecord, error: analysisError } = await supabase
@@ -421,13 +422,17 @@ export async function fetchDashboardStateAction() {
         .from('analyses')
         .select('*')
         .eq('user_id', user.id)
-        .order('id', { ascending: false });
+        .order('created_at', { ascending: false });
 
+      if (analysesError) {
+        console.error('[Dashboard] Error fetching from analyses table:', analysesError.message, analysesError.details, analysesError.hint);
+      }
       if (!analysesError && analysesData && analysesData.length > 0) {
         fetchedProducts = analysesData;
+        console.log(`[Dashboard] Loaded ${analysesData.length} analyses records from DB for user ${user.id}`);
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.error('[Dashboard] Exception fetching analyses:', e);
     }
 
     if (fetchedProducts.length === 0) {
@@ -445,12 +450,31 @@ export async function fetchDashboardStateAction() {
       }
     }
 
-    // Format historical data
+    // Format historical data — reconstruct intelligence.executiveScorecard from DB columns
+    // so KPI cards compute correctly after a page reload
     const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: any) => {
       const intel = p.intelligence_data || p.intelligence || {};
+
+      // Merge defect_clusters into taxonomy if missing
       if ((!intel.defectTaxonomy || intel.defectTaxonomy.length === 0) && p.defect_clusters && Array.isArray(p.defect_clusters)) {
         intel.defectTaxonomy = p.defect_clusters;
       }
+
+      // Reconstruct executiveScorecard from flat DB columns if not present in intel blob
+      if (!intel.executiveScorecard) {
+        intel.executiveScorecard = {};
+      }
+      // Prefer DB columns for KPI computation — these are the ground-truth stored values
+      if (p.return_risk_score != null && intel.executiveScorecard.returnRiskScore == null) {
+        intel.executiveScorecard.returnRiskScore = p.return_risk_score;
+      }
+      if (p.capital_protected != null && intel.executiveScorecard.estimatedCapitalProtected == null) {
+        intel.executiveScorecard.estimatedCapitalProtected = p.capital_protected;
+      }
+      if (p.top_defect != null && intel.executiveScorecard.primaryRiskDriver == null) {
+        intel.executiveScorecard.primaryRiskDriver = p.top_defect;
+      }
+
       return {
         id: p.id,
         url: p.product_url || p.url,

@@ -896,6 +896,7 @@ export default function Dashboard() {
   const [analyses, setAnalyses] = useState<AnalyzedProductSummary[]>([]);
   const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingCatalog, setIsFetchingCatalog] = useState(true); // true until initial DB fetch completes
   const [activeStep, setActiveStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
@@ -915,16 +916,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function loadInitialState() {
-      const res = await fetchDashboardStateAction();
-      if (res.success) {
-        setUserState(res.user);
-        const data = res.historicalData || [];
-        setAnalyses(data);
-        if (data.length > 0 && !activeAnalysisId) {
-          setActiveAnalysisId(data[0].id || data[0].url || data[0].title);
+      try {
+        const res = await fetchDashboardStateAction();
+        if (res.success) {
+          setUserState(res.user);
+          const data = res.historicalData || [];
+          setAnalyses(data);
+          if (data.length > 0) {
+            // Always set activeAnalysisId to the most-recently-created record (index 0)
+            const firstId = data[0].id || data[0].url || data[0].title;
+            setActiveAnalysisId(firstId ?? null);
+            console.log(`[Dashboard] Auto-loaded ${data.length} catalog entries. Active: ${firstId}`);
+          }
+        } else {
+          setError(res.error || 'Failed to load dashboard state.');
         }
-      } else {
-        setError(res.error || "Failed to load dashboard state.");
+      } finally {
+        setIsFetchingCatalog(false);
       }
     }
     loadInitialState();
@@ -1129,8 +1137,8 @@ export default function Dashboard() {
         {/* KPI Portfolio Bar */}
         <KPICards data={analyses} />
 
-        {/* Onboarding Hero — shown only when user has 0 SKUs */}
-        {analyses.length === 0 && !isLoading && (
+        {/* Onboarding Hero — shown only when user has 0 SKUs AND initial fetch has completed */}
+        {analyses.length === 0 && !isLoading && !isFetchingCatalog && (
           <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center gap-4 py-8 bg-white/[0.02] border border-white/10 rounded-2xl">
             <div className="relative">
               <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">

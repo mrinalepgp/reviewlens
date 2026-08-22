@@ -29,6 +29,55 @@ export async function POST(request: Request) {
       return NextResponse.json(result, { status: 500 });
     }
 
+    // --- Belt-and-suspenders persistence guard ---
+    // If any summary came back without a DB id, the action's internal insert
+    // may have silently failed (e.g. RLS issue, schema mismatch). Attempt a
+    // direct Supabase insert here so data is never lost.
+    const orphans = result.summaries.filter(
+      (s) => !s.id || s.id.startsWith('analysis_')
+    );
+    if (orphans.length > 0) {
+      console.warn(
+        `[API /api/analyze] ${orphans.length} summaries have no persistent DB id. Attempting safety-net insert...`
+      );
+      for (const s of orphans) {
+        const { data: saved, error: saveErr } = await supabase
+          .from('analyses')
+          .insert({
+            user_id: user.id,
+            product_url: s.url,
+            platform: s.platform,
+            product_name: s.title,
+            product_title: s.title,
+            category: s.intelligence?.category || 'General',
+            average_rating: s.averageScore,
+            risk_status: s.riskAssessment,
+            return_risk_score: s.intelligence?.executiveScorecard?.returnRiskScore ?? 25,
+            top_defect: s.intelligence?.executiveScorecard?.primaryRiskDriver ?? null,
+            capital_protected: s.intelligence?.executiveScorecard?.estimatedCapitalProtected ?? null,
+            defect_clusters: s.intelligence?.defectTaxonomy ?? [],
+            raw_reviews: s.intelligence?.raw_reviews ?? [],
+            intelligence_data: s.intelligence ?? {},
+            created_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (saveErr) {
+          console.error(
+            `[API /api/analyze] Safety-net insert FAILED for "${s.title}":`,
+            JSON.stringify({ code: saveErr.code, message: saveErr.message, details: saveErr.details, hint: saveErr.hint })
+          );
+        } else {
+          console.log(
+            `[API /api/analyze] Safety-net insert committed for "${s.title}" → id=${saved?.id}`
+          );
+          // Backfill the id on the summary so the client can reference it
+          s.id = saved?.id;
+        }
+      }
+    }
+
     return NextResponse.json(result);
   } catch (err: any) {
     console.error('[API /api/analyze] Exception:', err);
