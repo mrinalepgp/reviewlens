@@ -14,6 +14,10 @@ export async function POST(request: Request) {
       );
     }
 
+    // Robust userId fallback: prefer UUID, fall back to email, then sentinel
+    const userId: string = user.id || user.email || 'demo-user-id';
+    console.log(`[API /api/analyze] Authenticated request. userId=${userId} email=${user.email}`);
+
     const body = await request.json();
     const { urls } = body;
 
@@ -44,7 +48,7 @@ export async function POST(request: Request) {
         const { data: saved, error: saveErr } = await supabase
           .from('analyses')
           .insert({
-            user_id: user.id,
+            user_id: userId,          // uses the robust fallback chain
             product_url: s.url,
             platform: s.platform,
             product_name: s.title,

@@ -914,22 +914,109 @@ export default function Dashboard() {
     (a.title && a.title === activeAnalysisId)
   ) || analyses[0] || null;
 
+  const CACHE_KEY = 'reviewlens_cached_catalog';
+
   useEffect(() => {
     async function loadInitialState() {
       try {
+        // ── Tier 1: Instant localStorage seed ─────────────────────────────
+        // Paint the catalog immediately from the last-known good cache so the
+        // user never sees a blank flash on reload.
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const cached = JSON.parse(raw) as AnalyzedProductSummary[];
+            if (Array.isArray(cached) && cached.length > 0) {
+              setAnalyses(cached);
+              const cachedId = cached[0].id || cached[0].url || cached[0].title;
+              setActiveAnalysisId(cachedId ?? null);
+              console.log(`[Dashboard] Seeded ${cached.length} entries from localStorage cache.`);
+            }
+          }
+        } catch (cacheErr) {
+          console.warn('[Dashboard] localStorage read failed (safe to ignore):', cacheErr);
+        }
+
+        // ── Tier 2: Direct Supabase client fetch ───────────────────────────
+        // Bypasses the server action for the hot path — uses the browser
+        // Supabase client (session cookie auto-attached) to pull the live
+        // analyses table immediately, then writes back to the cache.
+        try {
+          const supabaseClient = createClient();
+          const { data: liveRows, error: liveError } = await supabaseClient
+            .from('analyses')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (liveError) {
+            console.warn('[Dashboard] Direct Supabase fetch error:', liveError.message);
+          } else if (liveRows && liveRows.length > 0) {
+            // Map raw DB rows into AnalyzedProductSummary shape
+            const mapped: AnalyzedProductSummary[] = liveRows.map((p: any) => {
+              const intel = p.intelligence_data || p.intelligence || {};
+              if ((!intel.defectTaxonomy || intel.defectTaxonomy.length === 0) && p.defect_clusters && Array.isArray(p.defect_clusters)) {
+                intel.defectTaxonomy = p.defect_clusters;
+              }
+              if (!intel.executiveScorecard) intel.executiveScorecard = {};
+              if (p.return_risk_score != null && intel.executiveScorecard.returnRiskScore == null)
+                intel.executiveScorecard.returnRiskScore = p.return_risk_score;
+              if (p.capital_protected != null && intel.executiveScorecard.estimatedCapitalProtected == null)
+                intel.executiveScorecard.estimatedCapitalProtected = p.capital_protected;
+              if (p.top_defect != null && intel.executiveScorecard.primaryRiskDriver == null)
+                intel.executiveScorecard.primaryRiskDriver = p.top_defect;
+              return {
+                id: p.id,
+                url: p.product_url || p.url,
+                platform: p.platform,
+                title: p.product_name || p.title || p.product_title,
+                category: p.category,
+                averageScore: p.average_rating || p.averageScore || 4.0,
+                riskAssessment: p.risk_status || p.riskAssessment || 'safe',
+                negativeThemes: intel?.executiveScorecard?.primaryRiskDriver
+                  ? [intel.executiveScorecard.primaryRiskDriver] : [],
+                intelligence: intel,
+              };
+            });
+
+            setAnalyses(mapped);
+            const liveId = mapped[0].id || mapped[0].url || mapped[0].title;
+            setActiveAnalysisId(liveId ?? null);
+            console.log(`[Dashboard] Direct Supabase fetch: ${mapped.length} analyses loaded. Active: ${liveId}`);
+
+            // Persist to cache for next-render speed
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
+            } catch { /* quota exceeded — ignore */ }
+          } else {
+            console.log('[Dashboard] Direct Supabase fetch: no rows (new user or cleared catalog).');
+            // Clear stale cache if DB is empty (e.g. after clear-all)
+            try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+          }
+        } catch (directErr) {
+          console.warn('[Dashboard] Direct Supabase fetch threw:', directErr);
+        }
+
+        // ── Tier 3: Server action for user profile / credits ───────────────
+        // Runs in parallel — only updates userState, does NOT overwrite catalog
+        // (we already have authoritative data from Tier 2).
         const res = await fetchDashboardStateAction();
         if (res.success) {
           setUserState(res.user);
-          const data = res.historicalData || [];
-          setAnalyses(data);
-          if (data.length > 0) {
-            // Always set activeAnalysisId to the most-recently-created record (index 0)
-            const firstId = data[0].id || data[0].url || data[0].title;
-            setActiveAnalysisId(firstId ?? null);
-            console.log(`[Dashboard] Auto-loaded ${data.length} catalog entries. Active: ${firstId}`);
-          }
+          // Only fall back to server-action catalog if Tier 2 returned nothing
+          setAnalyses(prev => {
+            if (prev.length > 0) return prev; // already populated by Tier 2
+            const data = res.historicalData || [];
+            if (data.length > 0) {
+              const fallbackId = data[0].id || data[0].url || data[0].title;
+              setActiveAnalysisId(fallbackId ?? null);
+              console.log(`[Dashboard] Tier-3 fallback: loaded ${data.length} entries.`);
+              try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+            }
+            return data;
+          });
         } else {
-          setError(res.error || 'Failed to load dashboard state.');
+          console.warn('[Dashboard] Server action failed:', res.error);
+          setError(prev => prev || res.error || 'Failed to load dashboard state.');
         }
       } finally {
         setIsFetchingCatalog(false);
@@ -981,12 +1068,51 @@ export default function Dashboard() {
         });
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
-        // Background sync to pull latest state from database
-        fetchDashboardStateAction().then(res => {
-          if (res.success && res.historicalData && res.historicalData.length > 0) {
-            setAnalyses(res.historicalData);
+        // Background sync: pull fresh catalog from Supabase and refresh cache
+        void (async () => {
+          try {
+            const supabaseClient = createClient();
+            const { data: freshRows } = await supabaseClient
+              .from('analyses')
+              .select('*')
+              .order('created_at', { ascending: false });
+
+            if (freshRows && freshRows.length > 0) {
+              const freshMapped: AnalyzedProductSummary[] = freshRows.map((p: any) => {
+                const intel = p.intelligence_data || p.intelligence || {};
+                if ((!intel.defectTaxonomy || intel.defectTaxonomy.length === 0) && p.defect_clusters && Array.isArray(p.defect_clusters))
+                  intel.defectTaxonomy = p.defect_clusters;
+                if (!intel.executiveScorecard) intel.executiveScorecard = {};
+                if (p.return_risk_score != null && intel.executiveScorecard.returnRiskScore == null)
+                  intel.executiveScorecard.returnRiskScore = p.return_risk_score;
+                if (p.capital_protected != null && intel.executiveScorecard.estimatedCapitalProtected == null)
+                  intel.executiveScorecard.estimatedCapitalProtected = p.capital_protected;
+                if (p.top_defect != null && intel.executiveScorecard.primaryRiskDriver == null)
+                  intel.executiveScorecard.primaryRiskDriver = p.top_defect;
+                return {
+                  id: p.id, url: p.product_url || p.url, platform: p.platform,
+                  title: p.product_name || p.title || p.product_title, category: p.category,
+                  averageScore: p.average_rating || p.averageScore || 4.0,
+                  riskAssessment: p.risk_status || p.riskAssessment || 'safe',
+                  negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
+                  intelligence: intel,
+                };
+              });
+              setAnalyses(freshMapped);
+              // Refresh localStorage cache with authoritative post-audit state
+              try { localStorage.setItem('reviewlens_cached_catalog', JSON.stringify(freshMapped)); } catch { /* ignore */ }
+              console.log(`[Dashboard] Post-audit sync: refreshed ${freshMapped.length} records in DB + cache.`);
+            }
+          } catch (syncErr) {
+            console.warn('[Dashboard] Post-audit Supabase sync failed:', syncErr);
           }
+        })();
+
+        // Also fetch user profile to update credits display
+        fetchDashboardStateAction().then(res => {
+          if (res.success) setUserState(res.user);
         });
+
 
         // Close modal smoothly after brief completion delay
         setTimeout(() => setIsIngestionModalOpen(false), 400);
@@ -1034,6 +1160,9 @@ export default function Dashboard() {
       // Atomically reset the entire catalog UI to zero-state
       setAnalyses([]);
       setActiveAnalysisId(null);
+
+      // Invalidate localStorage cache so next reload doesn't re-surface stale data
+      try { localStorage.removeItem('reviewlens_cached_catalog'); } catch { /* ignore */ }
     } catch (err: any) {
       console.error('[Dashboard] Clear all failed:', err);
       setError('Failed to clear history: ' + (err.message || 'Unknown error'));
