@@ -222,7 +222,11 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
             .single();
 
           if (analysisError) {
-            console.error("[Database] Primary insert error for 'analyses' table:", analysisError.message || analysisError);
+            console.error(
+              "[Database] Primary insert error for 'analyses' table:",
+              JSON.stringify({ code: analysisError.code, message: analysisError.message, details: analysisError.details, hint: analysisError.hint })
+            );
+            // Fallback: minimal payload in case schema drift caused the full insert to fail
             const { data: fallbackRecord, error: fallbackError } = await supabase
               .from('analyses')
               .insert({
@@ -232,7 +236,8 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
                 product_name: productName,
                 average_rating: averageScore,
                 risk_status: riskAssessment,
-                intelligence_data: safeIntelligenceData
+                intelligence_data: safeIntelligenceData,
+                created_at: new Date().toISOString()
               })
               .select('id')
               .single();
@@ -240,11 +245,33 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
               insertedId = fallbackRecord.id;
               console.log(`[Database] Fallback committed analysis record to 'analyses': ${fallbackRecord.id}`);
             } else if (fallbackError) {
-              console.error("[Database] Fallback insert also failed:", fallbackError.message);
+              console.error(
+                "[Database] Fallback insert also failed:",
+                JSON.stringify({ code: fallbackError.code, message: fallbackError.message, details: fallbackError.details, hint: fallbackError.hint })
+              );
             }
           } else if (analysisRecord?.id) {
             insertedId = analysisRecord.id;
             console.log(`[Database] Successfully committed analysis record to 'analyses' table: ${analysisRecord.id}`);
+
+            // --- Atomic persistence verification ---
+            // Immediately re-read the record by id + user_id to confirm it is
+            // durably committed and visible to subsequent SELECT queries.
+            const { data: verified, error: verifyError } = await supabase
+              .from('analyses')
+              .select('id, created_at')
+              .eq('id', analysisRecord.id)
+              .eq('user_id', user.id)
+              .single();
+
+            if (verifyError || !verified?.id) {
+              console.warn(
+                `[Database] ⚠ Persistence verification FAILED for record ${analysisRecord.id}:`,
+                verifyError?.message || 'Record not found on immediate re-read'
+              );
+            } else {
+              console.log(`[Database] ✓ Persistence verified: record ${verified.id} is readable (created_at: ${verified.created_at})`);
+            }
           }
         } catch (e) {
           console.error("[Database] Exception during 'analyses' table insert:", e);

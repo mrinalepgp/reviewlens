@@ -3,7 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, clearAllHistoryAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
+import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -1019,12 +1019,24 @@ export default function Dashboard() {
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm("Are you sure you want to clear all history? This cannot be undone.")) return;
-    const res = await clearAllHistoryAction();
-    if (res.success) {
+    if (!window.confirm('Are you sure you want to clear all history? This cannot be undone.')) return;
+
+    try {
+      const res = await fetch('/api/catalog/clear', { method: 'DELETE' });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `HTTP ${res.status}`);
+      }
+
+      console.log(`[Dashboard] Cleared ${json.deleted ?? 0} catalog record(s) from DB.`);
+
+      // Atomically reset the entire catalog UI to zero-state
       setAnalyses([]);
-    } else {
-      setError("Failed to clear history: " + res.error);
+      setActiveAnalysisId(null);
+    } catch (err: any) {
+      console.error('[Dashboard] Clear all failed:', err);
+      setError('Failed to clear history: ' + (err.message || 'Unknown error'));
     }
   };
 
