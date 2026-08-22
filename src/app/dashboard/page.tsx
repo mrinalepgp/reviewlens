@@ -893,10 +893,32 @@ const MOCK_HISTORICAL_DATA: AnalyzedProductSummary[] = [
 ];
 
 export default function Dashboard() {
-  const [analyses, setAnalyses] = useState<AnalyzedProductSummary[]>([]);
-  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(null);
+  // ── Synchronous localStorage seed ────────────────────────────────────────
+  // Runs in the useState initializer — before the first paint — so returning
+  // users NEVER see a blank flash on reload. No useEffect needed for this.
+  const CACHE_KEY = 'reviewlens_catalog';
+
+  const readCache = (): AnalyzedProductSummary[] => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as AnalyzedProductSummary[];
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* corrupt JSON — ignore */ }
+    return [];
+  };
+
+  const [analyses, setAnalyses] = useState<AnalyzedProductSummary[]>(readCache);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string | null>(() => {
+    const cached = readCache();
+    if (cached.length > 0) return cached[0].id || cached[0].url || cached[0].title || null;
+    return null;
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetchingCatalog, setIsFetchingCatalog] = useState(true); // true until initial DB fetch completes
+  // isFetchingCatalog: start false if we already have cache data (no onboarding flash needed)
+  const [isFetchingCatalog, setIsFetchingCatalog] = useState<boolean>(() => readCache().length === 0);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [error, setError] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<AnalyzedProductSummary | null>(null);
@@ -908,39 +930,20 @@ export default function Dashboard() {
   const [currentSkuIndex, setCurrentSkuIndex] = useState(0);
   const [totalSkus, setTotalSkus] = useState(0);
 
-  const activeProduct = analyses.find(a => 
-    (a.id && a.id === activeAnalysisId) || 
-    (a.url && a.url === activeAnalysisId) || 
+
+  const activeProduct = analyses.find(a =>
+    (a.id && a.id === activeAnalysisId) ||
+    (a.url && a.url === activeAnalysisId) ||
     (a.title && a.title === activeAnalysisId)
   ) || analyses[0] || null;
-
-  const CACHE_KEY = 'reviewlens_cached_catalog';
 
   useEffect(() => {
     async function loadInitialState() {
       try {
-        // ── Tier 1: Instant localStorage seed ─────────────────────────────
-        // Paint the catalog immediately from the last-known good cache so the
-        // user never sees a blank flash on reload.
-        try {
-          const raw = localStorage.getItem(CACHE_KEY);
-          if (raw) {
-            const cached = JSON.parse(raw) as AnalyzedProductSummary[];
-            if (Array.isArray(cached) && cached.length > 0) {
-              setAnalyses(cached);
-              const cachedId = cached[0].id || cached[0].url || cached[0].title;
-              setActiveAnalysisId(cachedId ?? null);
-              console.log(`[Dashboard] Seeded ${cached.length} entries from localStorage cache.`);
-            }
-          }
-        } catch (cacheErr) {
-          console.warn('[Dashboard] localStorage read failed (safe to ignore):', cacheErr);
-        }
-
         // ── Tier 2: Direct Supabase client fetch ───────────────────────────
-        // Bypasses the server action for the hot path — uses the browser
-        // Supabase client (session cookie auto-attached) to pull the live
-        // analyses table immediately, then writes back to the cache.
+        // Tier 1 already seeded state synchronously from cache via useState.
+        // This background fetch syncs with the authoritative DB state and
+        // updates both the UI and localStorage cache silently.
         try {
           const supabaseClient = createClient();
           const { data: liveRows, error: liveError } = await supabaseClient
@@ -997,14 +1000,15 @@ export default function Dashboard() {
         }
 
         // ── Tier 3: Server action for user profile / credits ───────────────
-        // Runs in parallel — only updates userState, does NOT overwrite catalog
-        // (we already have authoritative data from Tier 2).
+        // Only updates userState. Does NOT overwrite catalog (Tier 2 is
+        // authoritative). Falls back to server-action catalog only if both
+        // localStorage AND the direct Supabase fetch returned nothing.
         const res = await fetchDashboardStateAction();
         if (res.success) {
           setUserState(res.user);
           // Only fall back to server-action catalog if Tier 2 returned nothing
           setAnalyses(prev => {
-            if (prev.length > 0) return prev; // already populated by Tier 2
+            if (prev.length > 0) return prev; // already populated
             const data = res.historicalData || [];
             if (data.length > 0) {
               const fallbackId = data[0].id || data[0].url || data[0].title;
@@ -1055,20 +1059,30 @@ export default function Dashboard() {
         setActiveStep(3);
         const updatedSummaries = response.summaries;
 
-        // Auto-focus the first newly analyzed product
+        // ── Atomic localStorage write on audit completion ──────────────────
+        // Build the updated array first, then write to localStorage immediately
+        // (before any async background work) so a page refresh right after an
+        // audit always finds the new data in cache.
+        setAnalyses(prev => {
+          const existingIds = new Set(prev.map(p => p.id || p.title));
+          const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
+          const updated = [...newItems, ...prev];
+          // Atomic sync to localStorage — zero-latency persistence
+          try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch { /* quota — ignore */ }
+          console.log(`[Dashboard] Atomic cache write: ${updated.length} total entries persisted.`);
+          return updated;
+        });
+
+        // Set the first new result as active
         if (updatedSummaries.length > 0) {
           const newId = updatedSummaries[0].id || updatedSummaries[0].url || updatedSummaries[0].title;
           if (newId) setActiveAnalysisId(newId);
         }
 
-        setAnalyses((prev) => {
-          const existingIds = new Set(prev.map(p => p.id || p.title));
-          const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
-          return [...newItems, ...prev];
-        });
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
 
-        // Background sync: pull fresh catalog from Supabase and refresh cache
+        // Background sync: replace local state with authoritative DB snapshot
+        // (picks up DB ids + any server-side field enrichment) and re-saves cache.
         void (async () => {
           try {
             const supabaseClient = createClient();
@@ -1099,20 +1113,19 @@ export default function Dashboard() {
                 };
               });
               setAnalyses(freshMapped);
-              // Refresh localStorage cache with authoritative post-audit state
-              try { localStorage.setItem('reviewlens_cached_catalog', JSON.stringify(freshMapped)); } catch { /* ignore */ }
-              console.log(`[Dashboard] Post-audit sync: refreshed ${freshMapped.length} records in DB + cache.`);
+              // Overwrite cache with authoritative DB state (has real UUIDs, all fields)
+              try { localStorage.setItem(CACHE_KEY, JSON.stringify(freshMapped)); } catch { /* ignore */ }
+              console.log(`[Dashboard] Post-audit DB sync: refreshed ${freshMapped.length} records.`);
             }
           } catch (syncErr) {
             console.warn('[Dashboard] Post-audit Supabase sync failed:', syncErr);
           }
         })();
 
-        // Also fetch user profile to update credits display
+        // Fetch user profile to update credits display
         fetchDashboardStateAction().then(res => {
           if (res.success) setUserState(res.user);
         });
-
 
         // Close modal smoothly after brief completion delay
         setTimeout(() => setIsIngestionModalOpen(false), 400);
@@ -1162,7 +1175,11 @@ export default function Dashboard() {
       setActiveAnalysisId(null);
 
       // Invalidate localStorage cache so next reload doesn't re-surface stale data
-      try { localStorage.removeItem('reviewlens_cached_catalog'); } catch { /* ignore */ }
+      try {
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem('reviewlens_catalog');
+        localStorage.removeItem('reviewlens_cached_catalog');
+      } catch { /* ignore */ }
     } catch (err: any) {
       console.error('[Dashboard] Clear all failed:', err);
       setError('Failed to clear history: ' + (err.message || 'Unknown error'));
