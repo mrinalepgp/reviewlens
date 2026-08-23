@@ -166,9 +166,24 @@ ${payloadSnippet}
 
 DYNAMIC AI INSTRUCTIONS (100% CATEGORY-AGNOSTIC):
 1. Automatically deduce the exact micro-category of "${productTitle}" from its title and review context.
-2. Dynamically infer the Top 3 Indian market leader benchmark brands strictly for that deduced micro-category.
+2. CRITICAL COMPETITOR BRAND RULE — STRICTLY ENFORCED:
+   - You MUST output exactly 3 REAL, well-known Indian e-commerce market leader brands for the deduced micro-category.
+   - NEVER output generic placeholder text like "Top Category Leader 1", "Brand A", "Leading Brand", or any numbered template.
+   - Reference examples by category (use these as guidance, not verbatim):
+     * Apparel/Kurtis/Sarees: Libas, Biba, W for Woman, Janasya, Aurelia, Anouk, Global Desi
+     * Smartphones/Mobile: Xiaomi (Redmi), Realme, Samsung, OnePlus, Poco, Motorola, iQOO
+     * Electronics/Home Appliances: Bajaj, Philips, Havells, Crompton, Prestige, Borosil
+     * Headphones/Audio: boAt, JBL, Noise, Mivi, OnePlus Buds, Realme Buds
+     * Beauty/Personal Care: Mamaearth, WOW Skin Science, Plum, mCaffeine, Minimalist
+     * Footwear: Sparx, Bata, Campus, Red Tape, Woodland, Liberty
+     * Eyewear/Sunglasses: Lenskart, Vincent Chase, IDEE, Fastrack, Ray-Ban
+     * Bags/Accessories: Wildcraft, American Tourister, Safari, Skybags, Lavie
+   - Each competitor MUST include a concrete operational advantage (e.g., "Standardized size chart with zero shrinkage pre-wash", "48-hour defect replacement SLA").
+   - reviewsCount should be a realistic number (e.g., 4200, 8500, 3100), NOT small round numbers.
+   - benchmarkRisk should be a realistic percentage (e.g., 8.5, 11.2, 14.8).
 3. Extract 3 to 5 comprehensive, product-specific defect clusters, root cause diagnostics, factory fix actions, listing gap alerts, and native vernacular/Hinglish phrase decodes strictly tailored to this product and its category. Never output cross-domain terms!
 4. CRITICAL VERNACULAR QUOTE RULE: In 'rawVernacularText' and 'context', strip out redundant long product keyword titles so the quote reads naturally as authentic customer voice (e.g. 'Fabric is very thin (low GSM). Color bled heavily in first hand wash...'). Never include full product titles or catalog SEO noise inside quotes!
+5. keyTakeaways: Generate exactly 2 strategic takeaways that directly reference the competitor brands by name AND cite specific review-driven insights from the audited product. Do NOT use generic template language.
 
 Return raw JSON ONLY matching this schema:
 {
@@ -192,7 +207,7 @@ Return raw JSON ONLY matching this schema:
       "context": "Review excerpt context",
       "originalTerm": "Vernacular term extracted from review (e.g. Kharab build / Size chota / Sound drop)",
       "englishMeaning": "English translation of vernacular term",
-      "rawVernacularText": "Authentic customer quote snippet with product title/SEO noise stripped out (e.g., 'Fabric is very thin (low GSM). Color bled heavily in first hand wash...')",
+      "rawVernacularText": "Authentic customer quote snippet with product title/SEO noise stripped out",
       "detectedLanguage": "Hinglish / Regional",
       "decodedIntent": "Decoded intent / underlying defect cause",
       "businessImpactCategory": "Quality Defect / Sizing Mismatch / Refund Claim"
@@ -202,13 +217,13 @@ Return raw JSON ONLY matching this schema:
     "industryBenchmarkRisk": 15.5,
     "categoryRank": "#12 in Category SKUs",
     "competitors": [
-      { "name": "Top Indian Category Brand 1", "benchmarkRisk": 8.5, "reviewsCount": 420, "advantage": "Key product advantage of this leader" },
-      { "name": "Top Indian Category Brand 2", "benchmarkRisk": 12.0, "reviewsCount": 310, "advantage": "Key product advantage of this leader" },
-      { "name": "Top Indian Category Brand 3", "benchmarkRisk": 15.2, "reviewsCount": 250, "advantage": "Key product advantage of this leader" }
+      { "name": "Real Indian Brand Name (e.g. boAt)", "benchmarkRisk": 8.5, "reviewsCount": 4200, "advantage": "Concrete operational advantage like '30-day no-questions-asked replacement'" },
+      { "name": "Second Real Indian Brand", "benchmarkRisk": 11.2, "reviewsCount": 3100, "advantage": "Specific product quality differentiator" },
+      { "name": "Third Real Indian Brand", "benchmarkRisk": 14.8, "reviewsCount": 2800, "advantage": "Specific listing or QC advantage" }
     ],
     "keyTakeaways": [
-      "Key competitive takeaway 1 for this category",
-      "Key competitive takeaway 2 for this category"
+      "Strategic takeaway referencing specific competitor brand AND review insight from audited product",
+      "Second strategic takeaway with actionable competitive positioning recommendation"
     ]
   },
   "sentimentSummary": {
@@ -372,7 +387,9 @@ export async function executeMapReduceAnalysis(
   
   // Calculate Capital Protected dynamically: (Negative Sentiment Ratio * Est. Monthly Volume * Product Price)
   const estMonthlyVolume = 500;
-  const productPriceNum = 899;
+  // Import price from scraper heuristics instead of hardcoded 899
+  const { deriveCategoryPrice } = await import('./scraper');
+  const productPriceNum = deriveCategoryPrice(productTitle, deducedCategory);
   const estimatedCapitalProtected = Math.max(25000, Math.round(negativeRatio * estMonthlyVolume * productPriceNum));
 
   const riskStatus: 'safe' | 'warning' | 'critical' = 

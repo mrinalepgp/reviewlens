@@ -139,6 +139,31 @@ export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { t
   }
 }
 
+/**
+ * Derive a realistic fallback price from product title / category keywords.
+ * Returns an integer in INR (e.g. 499, 12999).
+ */
+export function deriveCategoryPrice(title: string, category: string): number {
+  const t = (title + ' ' + category).toLowerCase();
+  if (/phone|smartphone|galaxy|5g|iphone|oneplus|redmi|realme|pixel|poco/i.test(t)) return 12999;
+  if (/laptop|macbook|notebook|chromebook/i.test(t)) return 34999;
+  if (/tablet|ipad/i.test(t)) return 18999;
+  if (/tv|television|smart tv|led tv/i.test(t)) return 24999;
+  if (/headphone|earbud|earphone|speaker|soundbar|neckband/i.test(t)) return 1299;
+  if (/watch|smartwatch|fitness band/i.test(t)) return 2499;
+  if (/refrigerator|washing machine|microwave|dishwasher|ac|air conditioner/i.test(t)) return 18999;
+  if (/mixer|grinder|juicer|iron|kettle|toaster|fan|heater/i.test(t)) return 899;
+  if (/shoe|sneaker|boot|sandal|slipper|floater/i.test(t)) return 899;
+  if (/kurti|kurta|saree|lehenga|dress|gown/i.test(t)) return 499;
+  if (/shirt|tshirt|t-shirt|top|blouse|crop/i.test(t)) return 449;
+  if (/jean|pant|trouser|lower|legging|palazzo/i.test(t)) return 549;
+  if (/bag|backpack|handbag|purse|clutch|wallet/i.test(t)) return 699;
+  if (/sunglasses|eyewear|glasses|frame|goggles/i.test(t)) return 399;
+  if (/cream|serum|moisturizer|shampoo|face wash|lipstick|foundation/i.test(t)) return 349;
+  if (/toy|game|puzzle|board game/i.test(t)) return 499;
+  return 999;
+}
+
 export function generateContextualFallbackReviews(productTitle: string, category: string, marketplace: Marketplace): ReviewPayload[] {
   const lowerTitle = productTitle.toLowerCase();
   const lowerCat = category.toLowerCase();
@@ -148,36 +173,99 @@ export function generateContextualFallbackReviews(productTitle: string, category
 
   if (lowerTitle.includes('sunglasses') || lowerCat.includes('eyewear') || lowerTitle.includes('glasses')) {
     reviewsData = [
-      { rating: 2, content: `Frame build for ${productTitle} feels a bit plastic-y and thin. Lens glare is noticeable under bright direct sunlight.`, author: 'Rahul M.' },
-      { rating: 1, content: `Small scratch arrived on left lens of ${productTitle}. Nose pads are rigid and cause discomfort after 20 mins.`, author: 'Priya S.' },
+      { rating: 2, content: `Frame build feels a bit plastic-y and thin. Lens glare is noticeable under bright direct sunlight.`, author: 'Rahul M.' },
+      { rating: 1, content: `Small scratch arrived on left lens. Nose pads are rigid and cause discomfort after 20 mins.`, author: 'Priya S.' },
       { rating: 3, content: `Tint is nice and dark, but frame size is slightly wide for slim face. Average packaging.`, author: 'Amit K.' },
       { rating: 4, content: `Looks stylish and retro as advertised. Good value for money for daily commute.`, author: 'Vikas R.' },
       { rating: 2, content: `Color mismatch from pictures. The frame is shiny gold instead of matte finish. Lens gets finger smudges easily.`, author: 'Sneha P.' },
-      { rating: 1, content: `Hinge screw came loose after 3 days of wearing ${productTitle}. Disappointed with frame assembly.`, author: 'Deepak T.' }
+      { rating: 1, content: `Hinge screw came loose after 3 days. Disappointed with frame assembly.`, author: 'Deepak T.' },
+      { rating: 3, content: `UV protection seems okay. But one arm is slightly bent out of box, had to manually adjust.`, author: 'Nikhil R.' },
+      { rating: 2, content: `Feels very lightweight and fragile. Won't last rough daily use.`, author: 'Sandeep D.' },
+      { rating: 5, content: `Excellent finish for the price. Polarized lens works great on road trips. Case included.`, author: 'Anjali M.' },
+      { rating: 1, content: `Received different color than ordered. Return process initiated.`, author: 'Kavitha S.' },
+      { rating: 4, content: `Good fit on medium face. Slight tightness around temples but acceptable.`, author: 'Rohan J.' },
+      { rating: 2, content: `Anti-glare coating started peeling after a week. Cheap quality coating.`, author: 'Vikram P.' },
+      { rating: 3, content: `Okay for casual outings. Not suitable for sports or heavy activity.`, author: 'Tushar G.' },
+      { rating: 1, content: `Box arrived crushed, one lens had hairline crack. Bad packaging by seller.`, author: 'Divya N.' },
+      { rating: 4, content: `Stylish look, wife loved it as a gift. Good brand presentation.`, author: 'Manish K.' },
+      { rating: 2, content: `Nose bridge too narrow for Indian faces. Keeps sliding down.`, author: 'Arun B.' }
     ];
   } else if (lowerTitle.includes('headphone') || lowerTitle.includes('earbud') || lowerCat.includes('audio') || lowerTitle.includes('speaker')) {
     reviewsData = [
-      { rating: 1, content: `Left earbud of ${productTitle} stopped charging after 4 days. High treble causes harsh distortion at 80% volume.`, author: 'Karan G.' },
+      { rating: 1, content: `Left earbud stopped charging after 4 days. High treble causes harsh distortion at 80% volume.`, author: 'Karan G.' },
       { rating: 2, content: `Bluetooth connection drops repeatedly during outdoor walks. Mic quality is muffled on calls.`, author: 'Rohan N.' },
       { rating: 3, content: `Bass is punchy, but battery backup is only 3 hours instead of claimed 6 hours.`, author: 'Deepak V.' },
       { rating: 4, content: `Comfortable ear tips and fast pairing with Android phone. Decent build quality.`, author: 'Ankit B.' },
-      { rating: 1, content: `Case plastic feels flimsy and charging LED flickers continuously.`, author: 'Suresh R.' }
+      { rating: 1, content: `Case plastic feels flimsy and charging LED flickers continuously. Returned.`, author: 'Suresh R.' },
+      { rating: 5, content: `Excellent noise cancellation at this price. Audio quality rivals 3x expensive brands.`, author: 'Prateek S.' },
+      { rating: 2, content: `Touch controls are overly sensitive. Keeps pausing music accidentally during workouts.`, author: 'Neha K.' },
+      { rating: 3, content: `Sound quality is average. No real bass boost despite claims. Okay for calls.`, author: 'Amit T.' },
+      { rating: 1, content: `Both earbuds died completely within 2 weeks. Zero after-sales support from brand.`, author: 'Sanjay M.' },
+      { rating: 4, content: `Latency is low for gaming. Comfortable fit for 2+ hours continuous use.`, author: 'Gaurav P.' },
+      { rating: 2, content: `Voice assistant integration doesn't work with my phone. Misleading feature claim.`, author: 'Ritu S.' },
+      { rating: 3, content: `Passable audio quality for commute. Silicone tips fall off easily though.`, author: 'Harsh V.' },
+      { rating: 1, content: `Received used/returned product. Earwax visible on tips. Disgusting experience.`, author: 'Pooja L.' },
+      { rating: 4, content: `Good value for ₹999 range. Clear treble, okay bass, solid build.`, author: 'Vishal D.' },
+      { rating: 2, content: `Charging case hinge cracked within a month. Cheap plastic construction.`, author: 'Rakesh G.' },
+      { rating: 5, content: `IPX5 waterproof actually works. Used during rain jog, no issues. Great product.`, author: 'Meghna T.' }
     ];
-  } else if (lowerTitle.includes('shirt') || lowerTitle.includes('tshirt') || lowerCat.includes('apparel') || lowerTitle.includes('kurti')) {
+  } else if (lowerTitle.includes('shirt') || lowerTitle.includes('tshirt') || lowerCat.includes('apparel') || lowerTitle.includes('kurti') || lowerTitle.includes('kurta') || lowerTitle.includes('dress')) {
     reviewsData = [
-      { rating: 1, content: `Fabric of ${productTitle} is very thin (low GSM). Color bled heavily in first hand wash and shrank 1 inch.`, author: 'Meera K.' },
+      { rating: 1, content: `Fabric is very thin (low GSM). Color bled heavily in first hand wash and shrank 1 inch.`, author: 'Meera K.' },
       { rating: 2, content: `Stitching near shoulder armhole is loose with dangling threads. Fit runs smaller than size chart.`, author: 'Siddharth T.' },
       { rating: 3, content: `Decent casual wear for daily home use, but material feels slightly stiff before first wash.`, author: 'Pooja R.' },
       { rating: 4, content: `Nice print and vibrant color. Size L fits perfectly as expected.`, author: 'Varun S.' },
-      { rating: 1, content: `Button fell off on first day. Quality control needs major improvement.`, author: 'Aman P.' }
+      { rating: 1, content: `Button fell off on first day. Quality control needs major improvement.`, author: 'Aman P.' },
+      { rating: 5, content: `Brilliant fabric quality for the price. Stitching is neat and durable. Will buy again.`, author: 'Sneha M.' },
+      { rating: 2, content: `Color is completely different from listing photo. Got dull green instead of emerald.`, author: 'Priya D.' },
+      { rating: 3, content: `Fit is okay but length is 2 inches shorter than mentioned. Average quality.`, author: 'Rashmi G.' },
+      { rating: 1, content: `Fabric has a strong chemical smell. Even after washing twice, it persists.`, author: 'Anita K.' },
+      { rating: 4, content: `Good collar construction and well-finished cuffs. Fabric is breathable for summer.`, author: 'Rajesh B.' },
+      { rating: 2, content: `Size XL fits like a tight L. Seller needs to fix size chart urgently.`, author: 'Vikrant T.' },
+      { rating: 3, content: `Material is decent but pilling started after 3rd wash. Not durable long-term.`, author: 'Divya S.' },
+      { rating: 1, content: `Zipper broke on first use. Worst quality I've ever received from this seller.`, author: 'Mohan R.' },
+      { rating: 4, content: `Looks premium for the price. Got compliments at office. Good casual wear.`, author: 'Kavya N.' },
+      { rating: 2, content: `Iron mark transferred permanently onto fabric. Very low heat resistance material.`, author: 'Sunil M.' },
+      { rating: 5, content: `Perfect fit, beautiful embroidery work. Wore it for a wedding, received many compliments.`, author: 'Nidhi A.' },
+      { rating: 3, content: `Acceptable for everyday use. Nothing special about the fabric or design though.`, author: 'Aditya H.' }
+    ];
+  } else if (lowerTitle.includes('phone') || lowerTitle.includes('smartphone') || lowerTitle.includes('galaxy') || lowerTitle.includes('5g') || lowerTitle.includes('redmi') || lowerTitle.includes('realme')) {
+    reviewsData = [
+      { rating: 2, content: `Battery drains 40% overnight in standby. Heating issue during video calls exceeds comfortable temperature.`, author: 'Rahul K.' },
+      { rating: 1, content: `Screen developed a dead pixel cluster after 1 week. Camera quality is way below sample images shown.`, author: 'Priya M.' },
+      { rating: 4, content: `Good processor speed for the price. Gaming performance is smooth on medium settings.`, author: 'Arjun S.' },
+      { rating: 3, content: `Average camera in low light. Fingerprint sensor is slow compared to competitors.`, author: 'Neha T.' },
+      { rating: 1, content: `Received refurbished unit with micro scratches on back panel. Clearly not a new device.`, author: 'Vikram D.' },
+      { rating: 5, content: `Incredible value for money. 120Hz display is buttery smooth. 5G speeds are amazing.`, author: 'Gaurav P.' },
+      { rating: 2, content: `Speaker quality is tinny and distorted at max volume. Mono speaker only.`, author: 'Deepak R.' },
+      { rating: 3, content: `Phone is good overall but bloatware is excessive. Had to uninstall 15+ pre-loaded apps.`, author: 'Ankit M.' },
+      { rating: 4, content: `Fast charging works great. 0 to 100% in 45 mins. Build quality feels premium.`, author: 'Shreya L.' },
+      { rating: 1, content: `WiFi keeps disconnecting randomly. Software bug that hasn't been fixed in 2 updates.`, author: 'Suresh N.' },
+      { rating: 2, content: `UI lags after installing more than 30 apps. RAM management is poor.`, author: 'Kavita G.' },
+      { rating: 4, content: `Night mode photography is surprisingly good. Colours are accurate and natural.`, author: 'Ravi B.' },
+      { rating: 3, content: `Decent phone but plastic build feels cheap at this price point. Expected glass back.`, author: 'Megha S.' },
+      { rating: 1, content: `Touch screen became unresponsive near edges. Service center says not covered under warranty.`, author: 'Arun T.' },
+      { rating: 5, content: `Best phone under 15K. Smooth UI, great camera, excellent battery life. Highly recommended.`, author: 'Pooja V.' },
+      { rating: 2, content: `Network signal reception is weak compared to my old phone. Drops calls in low coverage areas.`, author: 'Sandeep K.' }
     ];
   } else {
     reviewsData = [
-      { rating: 2, content: `${productTitle} has unexpected quality discrepancy. Finish feels unrefined compared to listing images.`, author: 'Rajesh C.' },
+      { rating: 2, content: `Unexpected quality discrepancy. Finish feels unrefined compared to listing images.`, author: 'Rajesh C.' },
       { rating: 1, content: `Packaging was dented and item arrived with minor surface scuffs. Disappointed with dispatch QA.`, author: 'Nisha K.' },
       { rating: 3, content: `Functional for basic use, but material durability could be improved for long term usage.`, author: 'Sunil M.' },
       { rating: 4, content: `Product works as described. Decent shipping speed and fair pricing.`, author: 'Kavita L.' },
-      { rating: 2, content: `Item dimensions slightly differ from product listing specifications.`, author: 'Arun K.' }
+      { rating: 2, content: `Item dimensions slightly differ from product listing specifications.`, author: 'Arun K.' },
+      { rating: 5, content: `Excellent product quality. Exceeded my expectations for this price range. Fast delivery too.`, author: 'Priya S.' },
+      { rating: 1, content: `Arrived broken. Inner component was rattling. Had to initiate return immediately.`, author: 'Vikas T.' },
+      { rating: 3, content: `Average build quality. Gets the job done but doesn't feel premium.`, author: 'Neha R.' },
+      { rating: 2, content: `Color/shade is different from the product images. Misleading listing photography.`, author: 'Amit D.' },
+      { rating: 4, content: `Good value for money. Using for 2 weeks now, no complaints so far.`, author: 'Rohit G.' },
+      { rating: 1, content: `Missing accessories that were listed as included. Incomplete package from seller.`, author: 'Divya P.' },
+      { rating: 3, content: `Okay product for casual/temporary use. Wouldn't rely on it for daily heavy usage.`, author: 'Sanjay M.' },
+      { rating: 2, content: `Assembly instructions were unclear. Took 2 hours to figure out. Parts don't align perfectly.`, author: 'Meera V.' },
+      { rating: 4, content: `Solid construction and clean finish. Happy with the purchase overall.`, author: 'Karan B.' },
+      { rating: 1, content: `Product stopped working after 5 days. No response from seller for replacement claim.`, author: 'Rekha N.' },
+      { rating: 5, content: `Premium feel and great build quality. Worth every rupee spent. Would recommend to friends.`, author: 'Tushar S.' }
     ];
   }
 
@@ -337,9 +425,12 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com')) {
         pTitle = "";
       }
-      let pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, span[class*="price"], div[class*="price"], h8[class*="price"]').first().text().trim();
+      // Extract real selling price from DOM or raw HTML via regex ₹[\d,]+
+      let pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, span[class*="price"], div[class*="price"]').first().text().trim();
       if (!pPrice || !/\d/.test(pPrice)) {
-        pPrice = "";
+        // Fallback: regex scan the raw HTML for ₹ pattern
+        const priceMatch = (html || '').match(/₹[\s]?([\d,]+)/); 
+        pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }
 
       const extractedReviews: ReviewPayload[] = [];
@@ -391,7 +482,15 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const finalTitle = cleanScrapedTitle(scrapedTitle, parsedMeta.title);
     const finalCategory = parsedMeta.category;
     const finalBrand = parsedMeta.brand;
-    const estimatedPrice = scrapedPrice || "₹999";
+    // Parse scraped price into integer, or derive from category heuristics
+    let numericPrice = 0;
+    if (scrapedPrice) {
+      numericPrice = parseInt(scrapedPrice.replace(/[^0-9]/g, ''), 10) || 0;
+    }
+    if (!numericPrice) {
+      numericPrice = deriveCategoryPrice(finalTitle, finalCategory);
+    }
+    const estimatedPrice = scrapedPrice || `₹${numericPrice.toLocaleString('en-IN')}`;
 
     console.log(`[Parallel Scraper Pool] Harvested ${allExtractedReviews.length} deep reviews for product: "${finalTitle}" (${finalCategory})`);
 

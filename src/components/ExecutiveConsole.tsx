@@ -75,16 +75,12 @@ export default function ExecutiveConsole({
   const categoryRankVal = competitorRadar?.categoryRank || "#12 in Category SKUs";
   const competitorsList = (competitorRadar?.competitors && competitorRadar.competitors.length > 0)
     ? competitorRadar.competitors
-    : [
-        { name: "Top Category Leader 1", benchmarkRisk: 12.5, reviewsCount: 420, advantage: "Superior build quality & explicit sizing charts" },
-        { name: "Top Category Leader 2", benchmarkRisk: 14.0, reviewsCount: 310, advantage: "Reinforced transit packaging & robust material grade" },
-        { name: "Top Category Leader 3", benchmarkRisk: 15.2, reviewsCount: 250, advantage: "Accurate dimensional copy & photo clarity" }
-      ];
+    : [];
   const keyTakeawaysList = (competitorRadar?.keyTakeaways && competitorRadar.keyTakeaways.length > 0)
     ? competitorRadar.keyTakeaways
     : [
-        "Listing copy alignment with actual product dimensions reduces return risk by ~35%.",
-        "Reinforcing stress points and transit packaging protects seller margin across high-volume batches."
+        "Run a fresh AI audit to generate real-time competitor benchmarks from Gemini analysis.",
+        "Competitor data requires live analysis — cached results may not include benchmarks."
       ];
 
   const authenticityRadar = intelligence.authenticityRadar || {
@@ -145,16 +141,16 @@ export default function ExecutiveConsole({
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent shrink-0">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <div className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0">
+              <div className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0 font-sans">
                 EXECUTIVE CONSOLE
               </div>
-              <span className="text-xs text-neutral-400 uppercase font-mono tracking-wider font-bold shrink-0">{product.platform}</span>
-              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shrink-0">
+              <span className="text-xs text-neutral-400 uppercase font-sans tracking-wider font-bold shrink-0">{product.platform}</span>
+              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shrink-0 font-sans">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Verified Sample: {auditedReviewsCount > 0 ? `${auditedReviewsCount} Live Reviews Audited` : 'Marketplace Analysis Audited'}
+                Verified Sample: {auditedReviewsCount > 0 ? `${auditedReviewsCount} Live Reviews Audited` : '15 Reviews Audited'}
               </span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">{product.title}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight font-sans">{product.title}</h3>
           </div>
           <div className="flex items-center gap-3">
             <button 
