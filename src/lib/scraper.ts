@@ -422,19 +422,105 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
       const $ = cheerio.load(html || "<html></html>");
       
-      // Title extraction
       let pTitle = "";
-      if (marketplace === 'flipkart') {
-        pTitle = $('span.B_NuCI, h1._6EBuvT, h1.VU-ZEz, span.VU-ZEz, h1.C-cGAk, h1[class*="title"], h1').first().text().trim();
-      } else if (marketplace === 'meesho') {
-        pTitle = $('h1, h4[class*="StyledText"], h4[class*="Text__StyledText"], h1[class*="ProductTitle"]').first().text().trim();
+      let pPrice = "";
+
+      // ── Priority 1: Structured JSON-LD (<script type="application/ld+json">) ──
+      $('script[type="application/ld+json"]').each((_, el) => {
+        try {
+          const content = $(el).html();
+          if (!content) return;
+          const json = JSON.parse(content);
+          const items = Array.isArray(json) ? json : (json['@graph'] || [json]);
+
+          for (const item of items) {
+            if (!item) continue;
+            const type = String(item['@type'] || '').toLowerCase();
+            if (type.includes('product') || type.includes('itempage') || item.name || item.offers) {
+              if (!pTitle && item.name && typeof item.name === 'string') {
+                pTitle = item.name.trim();
+              }
+              const offers = item.offers;
+              if (offers && !pPrice) {
+                const offerList = Array.isArray(offers) ? offers : [offers];
+                for (const offer of offerList) {
+                  const val = offer?.price || offer?.lowPrice || offer?.highPrice;
+                  if (val != null) {
+                    const cleanVal = String(val).replace(/[^0-9.]/g, '');
+                    if (cleanVal) {
+                      pPrice = `₹${Math.round(parseFloat(cleanVal))}`;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch {
+          // ignore malformed JSON-LD
+        }
+      });
+
+      // ── Priority 2: OpenGraph & Twitter Meta Tags ─────────────────────────
+      if (!pTitle) {
+        const metaTitle = $('meta[property="og:title"]').attr('content') ||
+                          $('meta[name="twitter:title"]').attr('content') ||
+                          $('meta[name="title"]').attr('content') || "";
+        if (metaTitle) {
+          pTitle = metaTitle
+            .replace(/\|\s*Flipkart\.com.*/i, '')
+            .replace(/\|\s*Meesho.*/i, '')
+            .replace(/^Buy\s+/i, '')
+            .replace(/Online\s+at\s+Best\s+Price.*/i, '')
+            .trim();
+        }
+      }
+
+      if (!pPrice) {
+        const metaPrice = $('meta[property="product:price:amount"]').attr('content') ||
+                          $('meta[property="og:price:amount"]').attr('content') ||
+                          $('meta[name="twitter:label1:data"]').attr('content') || "";
+        if (metaPrice) {
+          const cleanVal = metaPrice.replace(/[^0-9.]/g, '');
+          if (cleanVal) pPrice = `₹${Math.round(parseFloat(cleanVal))}`;
+        }
+      }
+
+      // ── Priority 3: Next.js State Data (<script id="__NEXT_DATA__">) ─────
+      try {
+        const nextDataRaw = $('#__NEXT_DATA__').html();
+        if (nextDataRaw) {
+          const nextData = JSON.parse(nextDataRaw);
+          const pageProps = nextData?.props?.pageProps;
+          if (pageProps) {
+            const product = pageProps.productData || pageProps.product || pageProps.initialState?.product || pageProps.productDetails;
+            const priceVal = product?.discountedPrice || product?.price || product?.productPrice || product?.originalPrice || product?.supplierPrice || pageProps.price;
+            if (!pPrice && priceVal) {
+              const cleanedVal = String(priceVal).replace(/[^0-9]/g, '');
+              if (cleanedVal) pPrice = `₹${cleanedVal}`;
+            }
+            if (!pTitle && product?.name) {
+              pTitle = String(product.name).trim();
+            }
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+
+      // ── Priority 4: DOM Selectors & HTML Regex Fallbacks ──────────────────
+      if (!pTitle) {
+        if (marketplace === 'flipkart') {
+          pTitle = $('span.B_NuCI, h1._6EBuvT, h1.VU-ZEz, span.VU-ZEz, h1.C-cGAk, h1[class*="title"], h1').first().text().trim();
+        } else if (marketplace === 'meesho') {
+          pTitle = $('h1, h4[class*="StyledText"], h4[class*="Text__StyledText"], h1[class*="ProductTitle"]').first().text().trim();
+        }
       }
 
       if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com') || pTitle.toLowerCase().includes('meesho')) {
         pTitle = $('h1, h2, h3').first().text().trim();
       }
 
-      // Title Fallback: check <title> tag if DOM selectors returned empty or generic text
       if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com') || pTitle.toLowerCase().includes('meesho') || pTitle.toLowerCase() === 'product') {
         const titleTagText = $('title').text().trim();
         if (titleTagText) {
@@ -449,29 +535,6 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         }
       }
 
-      // Extract real selling price from DOM, Next.js state JSON, or raw HTML regex /(?:₹|Rs\.?)\s*([0-9,]+)/i
-      let pPrice = "";
-
-      // 1. Check Next.js state JSON <script id="__NEXT_DATA__">
-      try {
-        const nextDataRaw = $('#__NEXT_DATA__').html();
-        if (nextDataRaw) {
-          const nextData = JSON.parse(nextDataRaw);
-          const pageProps = nextData?.props?.pageProps;
-          if (pageProps) {
-            const product = pageProps.productData || pageProps.product || pageProps.initialState?.product || pageProps.productDetails;
-            const priceVal = product?.discountedPrice || product?.price || product?.productPrice || product?.originalPrice || product?.supplierPrice || pageProps.price;
-            if (priceVal) {
-              const cleanedVal = String(priceVal).replace(/[^0-9]/g, '');
-              if (cleanedVal) pPrice = `₹${cleanedVal}`;
-            }
-          }
-        }
-      } catch {
-        // ignore JSON parse error
-      }
-
-      // 2. DOM Selectors
       if (!pPrice || !/\d/.test(pPrice)) {
         if (marketplace === 'flipkart') {
           pPrice = $('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
@@ -488,7 +551,6 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       if (!pPrice || !/\d/.test(pPrice)) {
-        // 3. Fallback: regex scan the rendered HTML for /(?:₹|Rs\.?)\s*([0-9,]+)/i (e.g. "₹398")
         const priceMatch = (html || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i); 
         pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }

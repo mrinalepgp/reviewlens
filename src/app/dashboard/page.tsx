@@ -1159,10 +1159,23 @@ export default function Dashboard() {
   };
 
 
+  const persistCatalogState = (updated: AnalyzedProductSummary[]) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('reviewlens_persistent_catalog', JSON.stringify(updated));
+        localStorage.setItem('reviewlens_catalog', JSON.stringify(updated));
+      } catch { /* quota — ignore */ }
+    }
+  };
+
   const handleDeleteProduct = async (id: string) => {
     const res = await deleteProductAction(id);
     if (res.success) {
-      setAnalyses(prev => prev.filter(p => p.id !== id));
+      setAnalyses(prev => {
+        const next = prev.filter(p => p.id !== id);
+        persistCatalogState(next);
+        return next;
+      });
     } else {
       setError("Failed to delete product: " + res.error);
     }
@@ -1189,6 +1202,7 @@ export default function Dashboard() {
       try {
         localStorage.removeItem(CACHE_KEY);
         localStorage.removeItem('reviewlens_catalog');
+        localStorage.removeItem('reviewlens_persistent_catalog');
         localStorage.removeItem('reviewlens_cached_catalog');
       } catch { /* ignore */ }
     } catch (err: any) {
