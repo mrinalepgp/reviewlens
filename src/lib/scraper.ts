@@ -31,6 +31,7 @@ export interface EnterpriseIntelligence {
 
 export interface ScrapingResult {
   success: boolean;
+  scrapedLive?: boolean;
   marketplace: Marketplace;
   url: string;
   reviews: ReviewPayload[];
@@ -217,6 +218,7 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
 }
 
 export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResult> {
+  console.log('[Scraper] Triggering Live Scrape.do fetch for URL:', url);
   console.log(`[Parallel Scraper Pool] Spawning parallel worker pool for URL: ${url}`);
 
   let marketplace: Marketplace = 'unknown';
@@ -260,7 +262,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       
       if (scrapeDoKey) {
         // Scrape.do API Endpoint with render=true for full Javascript execution & DOM rendering
-        proxyUrl = `https://api.scrape.do/?token=${scrapeDoKey}&url=${encodeURIComponent(pageUrl)}&render=true`;
+        proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(pageUrl)}&render=true`;
       }
 
       if (proxyUrl) {
@@ -408,6 +410,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
 
     return {
       success: true,
+      scrapedLive: true,
       marketplace,
       url: sanitized,
       reviews: formattedReviews,

@@ -17,6 +17,7 @@ export interface AnalyzedProductSummary {
 
 export interface AnalyzeUrlsResponse {
   success: boolean;
+  scrapedLive?: boolean;
   summaries: AnalyzedProductSummary[];
   error?: string;
 }
@@ -338,6 +339,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
 
     return {
       success: true,
+      scrapedLive: true,
       summaries
     };
   } catch (error) {

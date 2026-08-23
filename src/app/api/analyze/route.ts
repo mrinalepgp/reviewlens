@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, scrapedLive: true });
   } catch (err: any) {
     console.error('[API /api/analyze] Exception:', err);
     return NextResponse.json(
