@@ -139,7 +139,7 @@ export default function ExecutiveConsole({
   };
   
   const riskScore = executiveScorecard?.returnRiskScore || 0;
-  const projectedBleed = monthlyUnits * (riskScore / 100) * returnCost;
+  const projectedBleed = monthlyUnits * (asp + returnCost) * (riskScore / 100);
   const recoverableMargin = projectedBleed * 0.40;
 
   return (

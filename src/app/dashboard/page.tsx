@@ -1064,9 +1064,9 @@ export default function Dashboard() {
         // (before any async background work) so a page refresh right after an
         // audit always finds the new data in cache.
         setAnalyses(prev => {
-          const existingIds = new Set(prev.map(p => p.id || p.title));
-          const newItems = updatedSummaries.filter(s => !existingIds.has(s.id || s.title));
-          const updated = [...newItems, ...prev];
+          const newIds = new Set(updatedSummaries.map(s => s.id || s.url || s.title));
+          const filteredPrev = prev.filter(p => !newIds.has(p.id || p.url || p.title));
+          const updated = [...updatedSummaries, ...filteredPrev];
           // Atomic sync to localStorage — zero-latency persistence
           try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch { /* quota — ignore */ }
           console.log(`[Dashboard] Atomic cache write: ${updated.length} total entries persisted.`);
@@ -1105,16 +1105,21 @@ export default function Dashboard() {
                   intel.executiveScorecard.primaryRiskDriver = p.top_defect;
                 return {
                   id: p.id, url: p.product_url || p.url, platform: p.platform,
-                  title: p.product_name || p.title || p.product_title, category: p.category,
+                  title: p.product_name || p.title || p.product_title, price: p.price || intel.price, category: p.category,
                   averageScore: p.average_rating || p.averageScore || 4.0,
                   riskAssessment: p.risk_status || p.riskAssessment || 'safe',
                   negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
                   intelligence: intel,
                 };
               });
-              setAnalyses(freshMapped);
-              // Overwrite cache with authoritative DB state (has real UUIDs, all fields)
-              try { localStorage.setItem(CACHE_KEY, JSON.stringify(freshMapped)); } catch { /* ignore */ }
+
+              setAnalyses(prev => {
+                const dbIds = new Set(freshMapped.map(m => m.id));
+                const localOnly = prev.filter(p => !p.id || !dbIds.has(p.id));
+                const merged = [...freshMapped, ...localOnly];
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify(merged)); } catch { /* ignore */ }
+                return merged;
+              });
               console.log(`[Dashboard] Post-audit DB sync: refreshed ${freshMapped.length} records.`);
             }
           } catch (syncErr) {

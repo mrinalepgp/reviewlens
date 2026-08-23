@@ -421,27 +421,51 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       const $ = cheerio.load(html || "<html></html>");
-      let pTitle = $('span.B_NuCI, h1._6EBuvT, span.VU-ZEz, h1.ProductTitle, h1._6ERy96').first().text().trim();
-      if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com')) {
-        pTitle = "";
+      
+      // Title extraction
+      let pTitle = "";
+      if (marketplace === 'flipkart') {
+        pTitle = $('span.B_NuCI, h1._6EBuvT, h1.VU-ZEz, span.VU-ZEz, h1.C-cGAk, h1[class*="title"], h1').first().text().trim();
+      } else if (marketplace === 'meesho') {
+        pTitle = $('h1, h4[class*="StyledText"], h4[class*="Text__StyledText"], h1[class*="ProductTitle"]').first().text().trim();
       }
+
+      if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com') || pTitle.toLowerCase().includes('meesho')) {
+        pTitle = $('h1, h2, h3').first().text().trim();
+      }
+
+      // Title Fallback: check <title> tag if DOM selectors returned empty or generic text
+      if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com') || pTitle.toLowerCase().includes('meesho') || pTitle.toLowerCase() === 'product') {
+        const titleTagText = $('title').text().trim();
+        if (titleTagText) {
+          pTitle = titleTagText
+            .replace(/\|\s*Flipkart\.com.*/i, '')
+            .replace(/\|\s*Meesho.*/i, '')
+            .replace(/^Buy\s+/i, '')
+            .replace(/Online\s+at\s+Best\s+Price.*/i, '')
+            .replace(/Online\s+in\s+India.*/i, '')
+            .replace(/Online\s+Shopping\s+Site.*/i, '')
+            .trim();
+        }
+      }
+
       // Extract real selling price from DOM or raw HTML via selectors or regex ₹[\d,]+
       let pPrice = "";
-      if (marketplace === 'meesho') {
-        pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"], h4[class*="Price"], p[class*="Price"], div[class*="Price"]').filter((_, el) => $(el).text().includes('₹')).first().text().trim();
+      if (marketplace === 'flipkart') {
+        pPrice = $('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
+      } else if (marketplace === 'meesho') {
+        pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"], h4[class*="Price"], p[class*="Price"], div[class*="Price"], h4').filter((_, el) => $(el).text().includes('₹')).first().text().trim();
         if (!pPrice) {
           pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"]').first().text().trim();
         }
-      } else if (marketplace === 'flipkart') {
-        pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox').first().text().trim();
       }
 
       if (!pPrice || !/\d/.test(pPrice)) {
-        pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, h4[class*="Text__StyledText"], span[class*="sc-"], span[class*="price"], div[class*="price"]').first().text().trim();
+        pPrice = $('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, h4[class*="Text__StyledText"], span[class*="sc-"], span[class*="price"], div[class*="price"]').first().text().trim();
       }
 
       if (!pPrice || !/\d/.test(pPrice)) {
-        // Fallback: regex scan the raw HTML for ₹ pattern (e.g., "₹398")
+        // Fallback: regex scan the raw HTML for ₹ pattern (e.g., "₹628")
         const priceMatch = (html || '').match(/₹\s*([0-9,]+)/); 
         pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }
