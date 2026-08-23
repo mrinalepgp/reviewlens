@@ -17,12 +17,14 @@ export default function ExecutiveConsole({
   const [copiedDisputeTicket, setCopiedDisputeTicket] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   
+  const intelligence = product.intelligence || {};
+  const parsedPriceStr = (product as any).price || intelligence.price || (product as any).product_price || "";
+  const extractedNumericPrice = Number(String(parsedPriceStr).replace(/[^0-9.]/g, '')) || 999;
+
   // Calculator State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
-  const [asp, setAsp] = useState<number>(999);
+  const [asp, setAsp] = useState<number>(() => (extractedNumericPrice > 0 ? extractedNumericPrice : 999));
   const [returnCost, setReturnCost] = useState<number>(180);
-  
-  const intelligence = product.intelligence || {};
 
   const handleExportPDF = () => {
     setIsExportingPDF(true);
@@ -135,7 +137,7 @@ export default function ExecutiveConsole({
       <div className="bg-neutral-950 border border-white/10 rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-white/5">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent shrink-0">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-white/10 bg-gradient-to-b from-white/[0.02] to-transparent shrink-0">
           <div>
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <div className="px-2 py-0.5 rounded text-xs font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0">
@@ -147,7 +149,7 @@ export default function ExecutiveConsole({
                 Verified Sample: {auditedReviewsCount > 0 ? `${auditedReviewsCount} Live Reviews Audited` : 'Marketplace Analysis Audited'}
               </span>
             </div>
-            <h3 className="text-2xl font-bold text-white tracking-tight">{product.title}</h3>
+            <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">{product.title}</h3>
           </div>
           <div className="flex items-center gap-3">
             <button 
@@ -157,100 +159,100 @@ export default function ExecutiveConsole({
             >
               {isExportingPDF ? '⏳ Exporting...' : '📥 Export Audit PDF'}
             </button>
-            <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5 shrink-0">
+            <button onClick={onClose} className="w-9 h-9 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 rounded-full transition-all bg-black/40 border border-white/5 shrink-0 text-sm">
               ✕
             </button>
           </div>
         </div>
         
-        <div className="p-6 overflow-y-auto flex-1 flex flex-col gap-8 custom-scrollbar">
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 flex flex-col gap-5 custom-scrollbar">
           
           {/* Top KPI Ribbon */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(executiveScorecard?.returnRiskScore || 0)}`}>
-              <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Return Probability Index</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <div className={`p-4 rounded-xl border flex flex-col gap-1.5 transition-all ${getSeverityColor(executiveScorecard?.returnRiskScore || 0)}`}>
+              <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Return Probability Index</span>
               <div className="flex items-end gap-2">
-                <span className="text-4xl font-black tabular-nums">{executiveScorecard?.returnRiskScore || 0}</span>
-                <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
+                <span className="text-3xl font-black tabular-nums">{executiveScorecard?.returnRiskScore || 0}</span>
+                <span className="text-xs font-medium mb-1 opacity-70">/ 100</span>
               </div>
             </div>
             
-            <div className="p-5 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md flex flex-col gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Estimated Margin Loss</span>
-              <span className="text-4xl font-black text-white tabular-nums">{executiveScorecard?.estimatedMarginLossRange || "N/A"}</span>
+            <div className="p-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur-md flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Estimated Margin Loss</span>
+              <span className="text-3xl font-black text-white tabular-nums">{executiveScorecard?.estimatedMarginLossRange || "N/A"}</span>
             </div>
             
-            <div className={`p-5 rounded-xl border flex flex-col gap-2 transition-all ${getSeverityColor(executiveScorecard?.listingHealthScore || 0, true)}`}>
-              <span className="text-xs font-semibold uppercase tracking-wider opacity-80">Listing Health Score</span>
+            <div className={`p-4 rounded-xl border flex flex-col gap-1.5 transition-all ${getSeverityColor(executiveScorecard?.listingHealthScore || 0, true)}`}>
+              <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Listing Health Score</span>
               <div className="flex items-end gap-2">
-                <span className="text-4xl font-black tabular-nums">{executiveScorecard?.listingHealthScore || 0}</span>
-                <span className="text-sm font-medium mb-1 opacity-70">/ 100</span>
+                <span className="text-3xl font-black tabular-nums">{executiveScorecard?.listingHealthScore || 0}</span>
+                <span className="text-xs font-medium mb-1 opacity-70">/ 100</span>
               </div>
             </div>
           </div>
 
           {/* Interactive Financial Margin Recovery Calculator */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex flex-col gap-6">
+          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 sm:p-5 flex flex-col gap-4">
             <div>
-              <h4 className="text-lg font-semibold text-white">ROI & Margin Recovery Calculator</h4>
-              <p className="text-sm text-neutral-400 mt-1">Estimate preventable losses using the AI return risk score and calculate actionable recovery.</p>
+              <h4 className="text-base font-bold text-white">ROI &amp; Margin Recovery Calculator</h4>
+              <p className="text-xs text-neutral-400 mt-0.5">Estimate preventable losses using the AI return risk score and calculate actionable recovery.</p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Inputs */}
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-neutral-300">Monthly Units Sold</label>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-neutral-300">Monthly Units Sold</label>
                   <input 
                     type="number" 
                     value={monthlyUnits} 
                     onChange={(e) => setMonthlyUnits(Number(e.target.value) || 0)}
-                    className="bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full max-w-xs"
+                    className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full max-w-xs"
                   />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-neutral-300">Average Selling Price (ASP)</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-neutral-300">Average Selling Price (ASP)</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2.5 text-xs text-neutral-500 font-mono">INR</span>
+                    <span className="absolute left-3 top-2 text-[10px] text-neutral-500 font-mono">INR</span>
                     <input 
                       type="number" 
                       value={asp} 
                       onChange={(e) => setAsp(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-11 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/40 border border-white/10 rounded-lg p-2 pl-10 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
                     />
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-neutral-300">Return Logistics Cost per Unit</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-neutral-300">Return Logistics Cost per Unit</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2.5 text-xs text-neutral-500 font-mono">INR</span>
+                    <span className="absolute left-3 top-2 text-[10px] text-neutral-500 font-mono">INR</span>
                     <input 
                       type="number" 
                       value={returnCost} 
                       onChange={(e) => setReturnCost(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2.5 pl-11 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/40 border border-white/10 rounded-lg p-2 pl-10 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Outputs */}
-              <div className="flex flex-col gap-4 justify-center">
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-5 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
+              <div className="flex flex-col gap-3 justify-center">
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
-                  <span className="text-xs font-bold text-rose-400 uppercase tracking-wider">Monthly Financial Bleed</span>
-                  <div className="text-3xl font-black text-white mt-1 mb-2 tabular-nums">{formatINR(projectedBleed)}</div>
-                  <span className="text-xs text-rose-300/80 bg-rose-500/10 px-2 py-1 rounded inline-block border border-rose-500/20">
+                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Monthly Financial Bleed</span>
+                  <div className="text-2xl font-black text-white mt-0.5 mb-1 tabular-nums">{formatINR(projectedBleed)}</div>
+                  <span className="text-[10px] text-rose-300/80 bg-rose-500/10 px-2 py-0.5 rounded inline-block border border-rose-500/20">
                     Logistics + processing loss on preventable returns
                   </span>
                 </div>
                 
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-5 shadow-[0_0_15px_rgba(16,185,129,0.05)] relative overflow-hidden">
+                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-[0_0_15px_rgba(16,185,129,0.05)] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Recoverable Profit</span>
-                  <div className="text-3xl font-black text-emerald-400 mt-1 mb-2 tabular-nums">{formatINR(recoverableMargin)}</div>
-                  <span className="text-xs text-emerald-300/80 bg-emerald-500/10 px-2 py-1 rounded inline-block border border-emerald-500/20">
-                    With ReviewLens Listing & QC Mitigation
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Recoverable Profit</span>
+                  <div className="text-2xl font-black text-emerald-400 mt-0.5 mb-1 tabular-nums">{formatINR(recoverableMargin)}</div>
+                  <span className="text-[10px] text-emerald-300/80 bg-emerald-500/10 px-2 py-0.5 rounded inline-block border border-emerald-500/20">
+                    With ReviewLens Listing &amp; QC Mitigation
                   </span>
                 </div>
               </div>
@@ -258,20 +260,20 @@ export default function ExecutiveConsole({
           </div>
 
           {/* Interactive Tabs */}
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap space-x-1 bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-1 bg-black/40 p-1 sm:p-1.5 rounded-xl border border-white/5 w-fit">
               {[
                 { id: 'diagnostics', label: 'Root-Cause' },
                 { id: 'playbook', label: 'Mitigation Playbook' },
                 { id: 'vernacular', label: 'Vernacular Decoder' },
                 { id: 'reviews', label: 'Review Stream' },
                 { id: 'competitors', label: 'Competitor Radar' },
-                { id: 'shield', label: 'Shield Radar (Authenticity)' }
+                { id: 'shield', label: 'Shield Radar' }
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     activeTab === tab.id 
                     ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' 
                     : 'text-neutral-400 hover:text-neutral-200 hover:bg-white/5'
@@ -282,7 +284,7 @@ export default function ExecutiveConsole({
               ))}
             </div>
 
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 min-h-[300px]">
+            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 sm:p-5 min-h-[260px]">
               
               {/* Tab 1: Diagnostics */}
               {activeTab === 'diagnostics' && (

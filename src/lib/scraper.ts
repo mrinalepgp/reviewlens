@@ -337,6 +337,11 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com')) {
         pTitle = "";
       }
+      let pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, span[class*="price"], div[class*="price"], h8[class*="price"]').first().text().trim();
+      if (!pPrice || !/\d/.test(pPrice)) {
+        pPrice = "";
+      }
+
       const extractedReviews: ReviewPayload[] = [];
 
       $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText, div.ReviewContainer, div[class*="review"]').each((idx, el) => {
@@ -355,7 +360,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         }
       });
 
-      return { title: pTitle, reviews: extractedReviews };
+      return { title: pTitle, price: pPrice, reviews: extractedReviews };
     };
 
     // Execute parallel workers concurrently using Promise.allSettled
@@ -365,6 +370,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const settledResults = await Promise.allSettled(workerPromises);
 
     let scrapedTitle = "";
+    let scrapedPrice = "";
     const allExtractedReviews: ReviewPayload[] = [];
 
     settledResults.forEach((res) => {
@@ -375,6 +381,9 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
             scrapedTitle = cleaned;
           }
         }
+        if (!scrapedPrice && res.value.price) {
+          scrapedPrice = res.value.price;
+        }
         if (res.value.reviews) allExtractedReviews.push(...res.value.reviews);
       }
     });
@@ -382,7 +391,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const finalTitle = cleanScrapedTitle(scrapedTitle, parsedMeta.title);
     const finalCategory = parsedMeta.category;
     const finalBrand = parsedMeta.brand;
-    const estimatedPrice = "₹899";
+    const estimatedPrice = scrapedPrice || "₹999";
 
     console.log(`[Parallel Scraper Pool] Harvested ${allExtractedReviews.length} deep reviews for product: "${finalTitle}" (${finalCategory})`);
 
