@@ -145,6 +145,7 @@ export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { t
  */
 export function deriveCategoryPrice(title: string, category: string): number {
   const t = (title + ' ' + category).toLowerCase();
+  if (/saree|kurti|kurta|lehenga|dress|gown/i.test(t)) return 499;
   if (/phone|smartphone|galaxy|5g|iphone|oneplus|redmi|realme|pixel|poco/i.test(t)) return 12999;
   if (/laptop|macbook|notebook|chromebook/i.test(t)) return 34999;
   if (/tablet|ipad/i.test(t)) return 18999;
@@ -154,7 +155,6 @@ export function deriveCategoryPrice(title: string, category: string): number {
   if (/refrigerator|washing machine|microwave|dishwasher|ac|air conditioner/i.test(t)) return 18999;
   if (/mixer|grinder|juicer|iron|kettle|toaster|fan|heater/i.test(t)) return 899;
   if (/shoe|sneaker|boot|sandal|slipper|floater/i.test(t)) return 899;
-  if (/kurti|kurta|saree|lehenga|dress|gown/i.test(t)) return 499;
   if (/shirt|tshirt|t-shirt|top|blouse|crop/i.test(t)) return 449;
   if (/jean|pant|trouser|lower|legging|palazzo/i.test(t)) return 549;
   if (/bag|backpack|handbag|purse|clutch|wallet/i.test(t)) return 699;
@@ -425,11 +425,24 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (!pTitle || pTitle.toLowerCase() === 'all reviews' || pTitle.toLowerCase().includes('flipkart.com')) {
         pTitle = "";
       }
-      // Extract real selling price from DOM or raw HTML via regex ₹[\d,]+
-      let pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, span[class*="price"], div[class*="price"]').first().text().trim();
+      // Extract real selling price from DOM or raw HTML via selectors or regex ₹[\d,]+
+      let pPrice = "";
+      if (marketplace === 'meesho') {
+        pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"], h4[class*="Price"], p[class*="Price"], div[class*="Price"]').filter((_, el) => $(el).text().includes('₹')).first().text().trim();
+        if (!pPrice) {
+          pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"]').first().text().trim();
+        }
+      } else if (marketplace === 'flipkart') {
+        pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox').first().text().trim();
+      }
+
       if (!pPrice || !/\d/.test(pPrice)) {
-        // Fallback: regex scan the raw HTML for ₹ pattern
-        const priceMatch = (html || '').match(/₹[\s]?([\d,]+)/); 
+        pPrice = $('div._30jeq3, div.Nx9bqj, div._16Jk6d, div._25bWox, h4[class*="Text__StyledText"], span[class*="sc-"], span[class*="price"], div[class*="price"]').first().text().trim();
+      }
+
+      if (!pPrice || !/\d/.test(pPrice)) {
+        // Fallback: regex scan the raw HTML for ₹ pattern (e.g., "₹398")
+        const priceMatch = (html || '').match(/₹\s*([0-9,]+)/); 
         pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }
 
@@ -482,15 +495,18 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     const finalTitle = cleanScrapedTitle(scrapedTitle, parsedMeta.title);
     const finalCategory = parsedMeta.category;
     const finalBrand = parsedMeta.brand;
-    // Parse scraped price into integer, or derive from category heuristics
+    // Parse scraped price into clean integer, or derive from category heuristics
     let numericPrice = 0;
     if (scrapedPrice) {
-      numericPrice = parseInt(scrapedPrice.replace(/[^0-9]/g, ''), 10) || 0;
+      const match = scrapedPrice.match(/₹?\s*([0-9,]+)/);
+      if (match) {
+        numericPrice = parseInt(match[1].replace(/,/g, ''), 10) || 0;
+      }
     }
     if (!numericPrice) {
       numericPrice = deriveCategoryPrice(finalTitle, finalCategory);
     }
-    const estimatedPrice = scrapedPrice || `₹${numericPrice.toLocaleString('en-IN')}`;
+    const estimatedPrice = scrapedPrice || `₹${numericPrice}`;
 
     console.log(`[Parallel Scraper Pool] Harvested ${allExtractedReviews.length} deep reviews for product: "${finalTitle}" (${finalCategory})`);
 

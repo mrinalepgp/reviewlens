@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { exportSupplierAuditPDF } from '@/lib/pdfExport';
 import { AnalyzedProductSummary } from '@/app/actions';
 import { sanitizeCustomerQuote } from '@/lib/analyzer';
@@ -19,17 +19,26 @@ export default function ExecutiveConsole({
   
   const intelligence = product.intelligence || {};
   const titleLower = (product.title || "").toLowerCase();
-  const parsedPriceStr = (product as any).price || intelligence.price || (product as any).product_price || "";
-  const extractedNumericPrice = Number(String(parsedPriceStr).replace(/[^0-9.]/g, '')) || 0;
+  const rawPriceStr = product.price || (product as any).price || intelligence.price || (product as any).product_price || "";
+  
+  // Extract clean numeric price (e.g. "₹398" -> 398)
+  const priceMatch = String(rawPriceStr).match(/₹?\s*([0-9,]+)/);
+  const extractedNumericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
 
   const defaultASP = extractedNumericPrice > 0 
     ? extractedNumericPrice 
-    : (/phone|galaxy|5g|laptop|smartphone|macbook|ipad|iphone|tablet/i.test(titleLower) ? 12999 : 999);
+    : (/saree|kurti|kurta|lehenga|dress|gown/i.test(titleLower) ? 499 : /phone|galaxy|5g|laptop|smartphone|macbook|ipad|iphone|tablet/i.test(titleLower) ? 12999 : 999);
 
   // Calculator State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
   const [asp, setAsp] = useState<number>(() => defaultASP);
   const [returnCost, setReturnCost] = useState<number>(180);
+
+  useEffect(() => {
+    if (defaultASP > 0) {
+      setAsp(defaultASP);
+    }
+  }, [product.id, defaultASP]);
 
   const handleExportPDF = () => {
     setIsExportingPDF(true);

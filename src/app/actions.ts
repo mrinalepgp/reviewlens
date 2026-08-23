@@ -9,6 +9,7 @@ export interface AnalyzedProductSummary {
   url: string;
   platform: string;
   title: string;
+  price?: string;
   averageScore: number;
   riskAssessment: 'safe' | 'warning' | 'critical';
   negativeThemes: string[];
@@ -328,6 +329,7 @@ export async function analyzeUrlsAction(urls: string[]): Promise<AnalyzeUrlsResp
         url,
         platform: scrapeResult.marketplace,
         title: productName,
+        price: scrapeResult.price,
         averageScore,
         riskAssessment,
         negativeThemes: Array.from(negativeThemes),
