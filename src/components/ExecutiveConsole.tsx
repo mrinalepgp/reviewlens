@@ -19,10 +19,10 @@ export default function ExecutiveConsole({
   
   const intelligence = product.intelligence || {};
   const titleLower = (product.title || "").toLowerCase();
-  const rawPriceStr = product.price || (product as any).price || intelligence.price || (product as any).product_price || "";
+  const rawPriceStr = product.price || (product as any).price || intelligence.price || (product as any).product_price || intelligence.executiveScorecard?.price || "";
   
   // Extract clean numeric price (e.g. "₹398" -> 398)
-  const priceMatch = String(rawPriceStr).match(/₹?\s*([0-9,]+)/);
+  const priceMatch = String(rawPriceStr).match(/(?:₹|Rs\.?)\s*([0-9,]+)/i) || String(rawPriceStr).match(/([0-9,]+)/);
   const extractedNumericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
 
   const defaultASP = extractedNumericPrice > 0 

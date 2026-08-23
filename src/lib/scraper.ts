@@ -449,14 +449,37 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         }
       }
 
-      // Extract real selling price from DOM or raw HTML via selectors or regex ₹[\d,]+
+      // Extract real selling price from DOM, Next.js state JSON, or raw HTML regex /(?:₹|Rs\.?)\s*([0-9,]+)/i
       let pPrice = "";
-      if (marketplace === 'flipkart') {
-        pPrice = $('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
-      } else if (marketplace === 'meesho') {
-        pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"], h4[class*="Price"], p[class*="Price"], div[class*="Price"], h4').filter((_, el) => $(el).text().includes('₹')).first().text().trim();
-        if (!pPrice) {
-          pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"]').first().text().trim();
+
+      // 1. Check Next.js state JSON <script id="__NEXT_DATA__">
+      try {
+        const nextDataRaw = $('#__NEXT_DATA__').html();
+        if (nextDataRaw) {
+          const nextData = JSON.parse(nextDataRaw);
+          const pageProps = nextData?.props?.pageProps;
+          if (pageProps) {
+            const product = pageProps.productData || pageProps.product || pageProps.initialState?.product || pageProps.productDetails;
+            const priceVal = product?.discountedPrice || product?.price || product?.productPrice || product?.originalPrice || product?.supplierPrice || pageProps.price;
+            if (priceVal) {
+              const cleanedVal = String(priceVal).replace(/[^0-9]/g, '');
+              if (cleanedVal) pPrice = `₹${cleanedVal}`;
+            }
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+
+      // 2. DOM Selectors
+      if (!pPrice || !/\d/.test(pPrice)) {
+        if (marketplace === 'flipkart') {
+          pPrice = $('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
+        } else if (marketplace === 'meesho') {
+          pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"], h4[class*="Price"], p[class*="Price"], div[class*="Price"], h4').filter((_, el) => $(el).text().includes('₹') || $(el).text().includes('Rs')).first().text().trim();
+          if (!pPrice) {
+            pPrice = $('h4[class*="Text__StyledText"], span[class*="sc-"]').first().text().trim();
+          }
         }
       }
 
@@ -465,8 +488,8 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
 
       if (!pPrice || !/\d/.test(pPrice)) {
-        // Fallback: regex scan the raw HTML for ₹ pattern (e.g., "₹628")
-        const priceMatch = (html || '').match(/₹\s*([0-9,]+)/); 
+        // 3. Fallback: regex scan the rendered HTML for /(?:₹|Rs\.?)\s*([0-9,]+)/i (e.g. "₹398")
+        const priceMatch = (html || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i); 
         pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }
 

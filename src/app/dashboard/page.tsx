@@ -896,12 +896,12 @@ export default function Dashboard() {
   // ── Synchronous localStorage seed ────────────────────────────────────────
   // Runs in the useState initializer — before the first paint — so returning
   // users NEVER see a blank flash on reload. No useEffect needed for this.
-  const CACHE_KEY = 'reviewlens_catalog';
+  const CACHE_KEY = 'reviewlens_persistent_catalog';
 
   const readCache = (): AnalyzedProductSummary[] => {
     if (typeof window === 'undefined') return [];
     try {
-      const raw = localStorage.getItem(CACHE_KEY);
+      const raw = localStorage.getItem('reviewlens_persistent_catalog') || localStorage.getItem('reviewlens_catalog');
       if (raw) {
         const parsed = JSON.parse(raw) as AnalyzedProductSummary[];
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -972,6 +972,7 @@ export default function Dashboard() {
                 url: p.product_url || p.url,
                 platform: p.platform,
                 title: p.product_name || p.title || p.product_title,
+                price: p.price || intel.price,
                 category: p.category,
                 averageScore: p.average_rating || p.averageScore || 4.0,
                 riskAssessment: p.risk_status || p.riskAssessment || 'safe',
@@ -981,19 +982,21 @@ export default function Dashboard() {
               };
             });
 
-            setAnalyses(mapped);
+            setAnalyses(prev => {
+              const dbIds = new Set(mapped.map(m => m.id));
+              const localOnly = prev.filter(p => !p.id || !dbIds.has(p.id));
+              const merged = [...mapped, ...localOnly];
+              try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
+                localStorage.setItem('reviewlens_catalog', JSON.stringify(merged));
+              } catch { /* quota exceeded — ignore */ }
+              return merged;
+            });
             const liveId = mapped[0].id || mapped[0].url || mapped[0].title;
-            setActiveAnalysisId(liveId ?? null);
+            setActiveAnalysisId(prev => prev || liveId || null);
             console.log(`[Dashboard] Direct Supabase fetch: ${mapped.length} analyses loaded. Active: ${liveId}`);
-
-            // Persist to cache for next-render speed
-            try {
-              localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
-            } catch { /* quota exceeded — ignore */ }
           } else {
-            console.log('[Dashboard] Direct Supabase fetch: no rows (new user or cleared catalog).');
-            // Clear stale cache if DB is empty (e.g. after clear-all)
-            try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+            console.log('[Dashboard] Direct Supabase fetch returned 0 rows. Preserving local cache.');
           }
         } catch (directErr) {
           console.warn('[Dashboard] Direct Supabase fetch threw:', directErr);
@@ -1068,8 +1071,11 @@ export default function Dashboard() {
           const filteredPrev = prev.filter(p => !newIds.has(p.id || p.url || p.title));
           const updated = [...updatedSummaries, ...filteredPrev];
           // Atomic sync to localStorage — zero-latency persistence
-          try { localStorage.setItem(CACHE_KEY, JSON.stringify(updated)); } catch { /* quota — ignore */ }
-          console.log(`[Dashboard] Atomic cache write: ${updated.length} total entries persisted.`);
+          try { 
+            localStorage.setItem('reviewlens_persistent_catalog', JSON.stringify(updated));
+            localStorage.setItem('reviewlens_catalog', JSON.stringify(updated));
+          } catch { /* quota — ignore */ }
+          console.log(`[Dashboard] Atomic cache write: ${updated.length} total entries persisted to reviewlens_persistent_catalog.`);
           return updated;
         });
 
