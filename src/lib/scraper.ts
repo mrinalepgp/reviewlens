@@ -2,7 +2,7 @@ import * as cheerio from 'cheerio';
 import { cleanAndParseJSON } from './ai';
 import { executeMapReduceAnalysis } from './analyzer';
 
-export type Marketplace = 'meesho' | 'flipkart' | 'amazon' | 'facebook' | 'zomato' | 'swiggy' | 'unknown';
+export type Marketplace = 'meesho' | 'flipkart' | 'amazon' | 'facebook' | 'zomato' | 'swiggy' | 'csv' | 'unknown';
 
 export interface ReviewPayload {
   id: string;
@@ -658,4 +658,73 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
     console.error(`[Parallel Scraper Pool] Exception:`, error);
     return { success: false, marketplace, url: sanitized, reviews: [], error: `Parallel scraping failed: ${error.message}` };
   }
+}
+
+/**
+ * Enterprise CSV Ingestion Engine for Flipkart / Meesho Seller Central exports.
+ * Parses 1,000 to 10,000+ review rows instantly without network latency.
+ */
+export function parseSellerCentralCSV(csvText: string) {
+  const lines = csvText.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) {
+    return {
+      title: 'Seller Central CSV Upload',
+      price: 999,
+      marketplace: 'csv',
+      category: 'General',
+      reviews: []
+    };
+  }
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const textIdx = headers.findIndex(h => h.includes('review') || h.includes('comment') || h.includes('feedback') || h.includes('content') || h.includes('text'));
+  const ratingIdx = headers.findIndex(h => h.includes('rating') || h.includes('star') || h.includes('score'));
+  const dateIdx = headers.findIndex(h => h.includes('date') || h.includes('created') || h.includes('timestamp'));
+  const titleIdx = headers.findIndex(h => h.includes('product') || h.includes('title') || h.includes('item') || h.includes('name'));
+  const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('asp') || h.includes('mrp'));
+
+  let detectedTitle = 'Seller Central CSV Catalog Batch';
+  let detectedPrice = 999;
+  const reviews: ReviewPayload[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].match(/(?:[^\s,"]|"(?:\\.|[^"])*")+/g) || lines[i].split(',');
+    const cleanCols = cols.map(c => c.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+    const content = textIdx !== -1 && cleanCols[textIdx] ? cleanCols[textIdx] : cleanCols[0] || '';
+    if (!content || content.length < 5) continue;
+
+    const rawRating = ratingIdx !== -1 && cleanCols[ratingIdx] ? parseFloat(cleanCols[ratingIdx]) : 4;
+    const rating = isNaN(rawRating) ? 4 : Math.min(5, Math.max(1, Math.round(rawRating)));
+
+    const dateStr = dateIdx !== -1 && cleanCols[dateIdx] ? cleanCols[dateIdx] : new Date(Date.now() - (i % 90) * 86400000).toISOString();
+
+    if (titleIdx !== -1 && cleanCols[titleIdx] && detectedTitle === 'Seller Central CSV Catalog Batch') {
+      detectedTitle = cleanCols[titleIdx];
+    }
+    if (priceIdx !== -1 && cleanCols[priceIdx] && detectedPrice === 999) {
+      const p = parseFloat(cleanCols[priceIdx].replace(/[^0-9.]/g, ''));
+      if (!isNaN(p) && p > 0) detectedPrice = p;
+    }
+
+    reviews.push({
+      id: `csv_${Date.now()}_${i}`,
+      marketplace: 'csv',
+      rating,
+      title: 'Verified Buyer Feedback',
+      content,
+      author: `Seller Central User ${i}`,
+      date: new Date(dateStr).toString() !== 'Invalid Date' ? new Date(dateStr).toISOString() : new Date().toISOString(),
+      sentiment: rating <= 2 ? 'CRITICAL DEFECT' : rating === 3 ? 'WARNING' : 'OPTIMAL',
+      isSuspicious: false,
+    });
+  }
+
+  return {
+    title: detectedTitle,
+    price: detectedPrice,
+    marketplace: 'csv',
+    category: 'Seller Central CSV Upload',
+    reviews,
+  };
 }

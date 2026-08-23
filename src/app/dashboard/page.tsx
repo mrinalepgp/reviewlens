@@ -987,7 +987,7 @@ export default function Dashboard() {
               const localOnly = prev.filter(p => !p.id || !dbIds.has(p.id));
               const merged = [...mapped, ...localOnly];
               try {
-                localStorage.setItem(CACHE_KEY, JSON.stringify(merged));
+                localStorage.setItem('reviewlens_persistent_catalog', JSON.stringify(merged));
                 localStorage.setItem('reviewlens_catalog', JSON.stringify(merged));
               } catch { /* quota exceeded — ignore */ }
               return merged;
