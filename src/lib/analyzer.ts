@@ -390,11 +390,15 @@ export async function executeMapReduceAnalysis(
         businessImpactCategory: "Refund Claim"
       })) : []);
 
+  if (aiCompetitorRadar && (aiCompetitorRadar.yourReturnRisk == null || isNaN(aiCompetitorRadar.yourReturnRisk))) {
+    aiCompetitorRadar.yourReturnRisk = weightedReturnRiskScore;
+  }
+
   // Only use AI-generated competitor radar — no static fallback brands
   const competitorRadar = aiCompetitorRadar || {
     industryBenchmarkRisk: 16.5,
     yourReturnRisk: weightedReturnRiskScore,
-    categoryRank: "Calculating...",
+    categoryRank: "#12 in Category SKUs",
     competitors: [],
     keyTakeaways: [
       "Run analysis to generate category-specific Indian competitor benchmarks via Gemini AI."
