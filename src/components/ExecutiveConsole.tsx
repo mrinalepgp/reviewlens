@@ -18,12 +18,17 @@ export default function ExecutiveConsole({
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const intelligence = product.intelligence || {};
+  const titleLower = (product.title || "").toLowerCase();
   const parsedPriceStr = (product as any).price || intelligence.price || (product as any).product_price || "";
-  const extractedNumericPrice = Number(String(parsedPriceStr).replace(/[^0-9.]/g, '')) || 999;
+  const extractedNumericPrice = Number(String(parsedPriceStr).replace(/[^0-9.]/g, '')) || 0;
+
+  const defaultASP = extractedNumericPrice > 0 
+    ? extractedNumericPrice 
+    : (/phone|galaxy|5g|laptop|smartphone|macbook|ipad|iphone|tablet/i.test(titleLower) ? 12999 : 999);
 
   // Calculator State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
-  const [asp, setAsp] = useState<number>(() => (extractedNumericPrice > 0 ? extractedNumericPrice : 999));
+  const [asp, setAsp] = useState<number>(() => defaultASP);
   const [returnCost, setReturnCost] = useState<number>(180);
 
   const handleExportPDF = () => {
@@ -192,66 +197,66 @@ export default function ExecutiveConsole({
           </div>
 
           {/* Interactive Financial Margin Recovery Calculator */}
-          <div className="bg-white/[0.02] border border-white/5 rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+          <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 sm:p-5 flex flex-col gap-4 font-sans">
             <div>
-              <h4 className="text-base font-bold text-white">ROI &amp; Margin Recovery Calculator</h4>
-              <p className="text-xs text-neutral-400 mt-0.5">Estimate preventable losses using the AI return risk score and calculate actionable recovery.</p>
+              <h4 className="text-base font-bold text-white tracking-tight font-sans">ROI &amp; Margin Recovery Calculator</h4>
+              <p className="text-xs text-neutral-400 mt-0.5 font-sans">Estimate preventable losses using the AI return risk score and calculate actionable recovery.</p>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Inputs */}
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 font-sans">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-neutral-300">Monthly Units Sold</label>
+                  <label className="text-xs font-semibold text-neutral-300 font-sans">Monthly Units Sold</label>
                   <input 
                     type="number" 
                     value={monthlyUnits} 
                     onChange={(e) => setMonthlyUnits(Number(e.target.value) || 0)}
-                    className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full max-w-xs"
+                    className="bg-black/60 border border-white/15 rounded-lg p-2 text-xs font-medium text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all w-full max-w-xs font-sans"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-neutral-300">Average Selling Price (ASP)</label>
+                  <label className="text-xs font-semibold text-neutral-300 font-sans">Average Selling Price (ASP)</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2 text-[10px] text-neutral-500 font-mono">INR</span>
+                    <span className="absolute left-3 top-2.5 text-[11px] text-neutral-400 font-mono font-bold select-none">INR</span>
                     <input 
                       type="number" 
                       value={asp} 
                       onChange={(e) => setAsp(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2 pl-10 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/60 border border-white/15 rounded-lg p-2 pl-12 text-xs font-medium text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all w-full font-sans"
                     />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-neutral-300">Return Logistics Cost per Unit</label>
+                  <label className="text-xs font-semibold text-neutral-300 font-sans">Return Logistics Cost per Unit</label>
                   <div className="relative max-w-xs">
-                    <span className="absolute left-3 top-2 text-[10px] text-neutral-500 font-mono">INR</span>
+                    <span className="absolute left-3 top-2.5 text-[11px] text-neutral-400 font-mono font-bold select-none">INR</span>
                     <input 
                       type="number" 
                       value={returnCost} 
                       onChange={(e) => setReturnCost(Number(e.target.value) || 0)}
-                      className="bg-black/40 border border-white/10 rounded-lg p-2 pl-10 text-xs text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all w-full"
+                      className="bg-black/60 border border-white/15 rounded-lg p-2 pl-12 text-xs font-medium text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all w-full font-sans"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Outputs */}
-              <div className="flex flex-col gap-3 justify-center">
-                <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 shadow-[0_0_15px_rgba(244,63,94,0.05)] relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
-                  <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Monthly Financial Bleed</span>
-                  <div className="text-2xl font-black text-white mt-0.5 mb-1 tabular-nums">{formatINR(projectedBleed)}</div>
-                  <span className="text-[10px] text-rose-300/80 bg-rose-500/10 px-2 py-0.5 rounded inline-block border border-rose-500/20">
+              <div className="flex flex-col gap-3 justify-center font-sans">
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 shadow-[0_0_15px_rgba(244,63,94,0.08)] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
+                  <span className="text-xs font-bold text-rose-400 uppercase tracking-wide font-sans block">MONTHLY FINANCIAL BLEED</span>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 mb-1.5 tabular-nums font-sans">{formatINR(projectedBleed)}</div>
+                  <span className="text-[11px] text-rose-300/90 bg-rose-500/20 px-2.5 py-1 rounded inline-block border border-rose-500/30 font-sans font-medium">
                     Logistics + processing loss on preventable returns
                   </span>
                 </div>
                 
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 shadow-[0_0_15px_rgba(16,185,129,0.05)] relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Recoverable Profit</span>
-                  <div className="text-2xl font-black text-emerald-400 mt-0.5 mb-1 tabular-nums">{formatINR(recoverableMargin)}</div>
-                  <span className="text-[10px] text-emerald-300/80 bg-emerald-500/10 px-2 py-0.5 rounded inline-block border border-emerald-500/20">
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 shadow-[0_0_15px_rgba(16,185,129,0.08)] relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
+                  <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide font-sans block">RECOVERABLE PROFIT</span>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1 mb-1.5 tabular-nums font-sans">{formatINR(recoverableMargin)}</div>
+                  <span className="text-[11px] text-emerald-300/90 bg-emerald-500/20 px-2.5 py-1 rounded inline-block border border-emerald-500/30 font-sans font-medium">
                     With ReviewLens Listing &amp; QC Mitigation
                   </span>
                 </div>
