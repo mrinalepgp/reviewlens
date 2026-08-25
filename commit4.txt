@@ -1,0 +1,1 @@
+fix(core): apply exact code patch for scrapeFlipkart

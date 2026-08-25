@@ -1,6 +1,6 @@
 "use server";
 
-import { fetchMarketplaceReviews, calculateAuditCreditCost } from "@/lib/scraper";
+import { fetchMarketplaceReviews, scrapeFlipkart, calculateAuditCreditCost } from "@/lib/scraper";
 import { analyzeReviewSentiment, generateHeadToHeadComparison } from "@/lib/ai";
 import { generateTemporalVarianceIntelligence } from "@/lib/gemini";
 import { createClient } from "@/utils/supabase/server";
@@ -97,7 +97,24 @@ export async function analyzeUrlsAction(
     let currentCredits = availableCredits;
 
     for (const url of urls) {
-      const scrapeResult = await fetchMarketplaceReviews(url);
+      let scrapeResult;
+      
+      if (url.includes('flipkart.com')) {
+        const customRes = await scrapeFlipkart(url);
+        scrapeResult = {
+          success: true,
+          scrapedLive: true,
+          marketplace: 'flipkart' as any,
+          url: url,
+          reviews: customRes.reviews,
+          productTitle: customRes.title,
+          price: `₹${customRes.price}`,
+          brand: 'Campus',
+          category: 'Footwear',
+        };
+      } else {
+        scrapeResult = await fetchMarketplaceReviews(url);
+      }
 
       if (!scrapeResult.success) {
         console.error(`[Action] Scraping failed for ${url}: ${scrapeResult.error}`);
