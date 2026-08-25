@@ -582,10 +582,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         }
       }
 
-      // Hard-patch for the specific Campus shoe to guarantee 917 as requested by the test
-      if (url.includes('itmc7ac92f06b0e6')) {
-         pPrice = '₹917';
-      }
+
 
       const extractedReviews: ReviewPayload[] = [];
 
@@ -866,109 +863,95 @@ export async function estimateAuditPreFlight(
   };
 }
 
-export async function scrapeFlipkart(inputUrl: string) {
-  const urlObj = new URL(inputUrl);
+export async function scrapeFlipkart(productUrl: string) {
+  const urlObj = new URL(productUrl);
   const pid = urlObj.searchParams.get('pid') || '';
-  
-  // 1. DYNAMIC PRODUCT PAGE URL
-  // Force base URL to point to the product detail page (/p/) not review listing (/product-reviews/)
-  const cleanProductUrl = inputUrl.replace('/product-reviews/', '/p/');
 
-  const res = await fetch(cleanProductUrl, {
+  // Clean pure product URL
+  const targetUrl = productUrl.replace('/product-reviews/', '/p/').split('?')[0] + (pid ? `?pid=${pid}` : '');
+
+  // Fetch with Mobile User-Agent (Flipkart does not bot-block Mobile Web headers on Vercel)
+  const response = await fetch(targetUrl, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept-Language': 'en-IN,en;q=0.9,hi;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-IN,en;q=0.9',
+      'Cache-Control': 'no-cache'
     },
     cache: 'no-store'
   });
-  const html = await res.text();
 
-  // 2. DYNAMIC TITLE EXTRACTION
+  const html = await response.text();
+
+  // Extract Title from OpenGraph / SSR title
   let title = '';
-  // Try standard Flipkart product title selectors
-  const titleMatch = html.match(/<span[^>]*class="[^"]*(?:VU-ZEz|B_NuCI)[^"]*"[^>]*>([\s\S]*?)<\/span>/i);
+  const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
+                  || html.match(/<title>([\s\S]*?)<\/title>/i);
   if (titleMatch) {
-    title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
-  }
-  if (!title) {
-    const metaTitle = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
-    if (metaTitle) title = metaTitle[1].replace(/Flipkart\.com.*$/, '').trim();
+    title = titleMatch[1].replace(/Flipkart\.com.*$/i, '').replace(/\|.*$/i, '').trim();
   }
 
-  // 3. DYNAMIC PRICE EXTRACTION (NO HARDCODED VALUES)
-  let extractedPrice = 0;
-  
-  // Strategy A: JSON-LD Schema (Most accurate)
-  const jsonLdBlocks = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-  for (const match of jsonLdBlocks) {
-    try {
-      const data = JSON.parse(match[1]);
-      const offer = data.offers || data[0]?.offers;
-      const priceVal = Array.isArray(offer) ? offer[0]?.price : offer?.price;
-      if (priceVal && Number(priceVal) > 50) {
-        extractedPrice = Number(priceVal);
-        break;
-      }
-    } catch (e) {}
+  // Extract Price strictly from JSON-LD or meta product:price:amount
+  let price = 0;
+  const metaPrice = html.match(/<meta\s+property="product:price:amount"\s+content="([\d.]+)"/i)
+                 || html.match(/<meta\s+name="twitter:data1"\s+content="₹?([\d,]+)"/i);
+  if (metaPrice) {
+    price = parseInt(metaPrice[1].replace(/[^0-9]/g, ''), 10);
   }
 
-  // Strategy B: Flipkart Active Price Class (div.Nx9bqj.CxhGGd / div._30jeq3._16Jk6d)
-  if (!extractedPrice) {
-    const priceTagMatch = html.match(/<div[^>]*class="[^"]*(?:Nx9bqj|30jeq3)[^"]*"[^>]*>[\s]*₹?([\d,]+)/i);
-    if (priceTagMatch) {
-      const val = parseInt(priceTagMatch[1].replace(/,/g, ''), 10);
-      if (val > 50) extractedPrice = val;
+  if (!price) {
+    const jsonMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
+    for (const match of jsonMatches) {
+      try {
+        const json = JSON.parse(match[1]);
+        const offer = json.offers || json[0]?.offers;
+        const p = Array.isArray(offer) ? offer[0]?.price : offer?.price;
+        if (p && Number(p) > 20) {
+          price = Number(p);
+          break;
+        }
+      } catch (e) {}
     }
   }
 
-  // Strategy C: Regex Search on ₹ or Rs adjacent to currency
-  if (!extractedPrice) {
-    const allMatches = html.matchAll(/(?:₹|Rs\.?)\s*([\d,]+)/gi);
-    for (const m of allMatches) {
-      const val = parseInt(m[1].replace(/,/g, ''), 10);
-      // Filter out small apparel sizes or discounts < 50
-      if (val > 50) {
-        extractedPrice = val;
-        break;
-      }
-    }
-  }
-
-  // 4. DYNAMIC MULTI-PAGE REVIEW INGESTION
-  const reviewEndpoint = cleanProductUrl.replace('/p/', '/product-reviews/') + (pid ? `?pid=${pid}` : '');
+  // Fallback: Fetch Reviews via paginated mobile review endpoints
+  const reviews: ReviewPayload[] = [];
+  const reviewEndpoint = targetUrl.replace('/p/', '/product-reviews/') + (pid ? `?pid=${pid}` : '');
   const reviewPages = await Promise.all([1, 2, 3].map(page => 
     fetch(`${reviewEndpoint}&page=${page}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
       cache: 'no-store'
     }).then(r => r.text()).catch(() => '')
   ));
 
-  let combinedReviews: ReviewPayload[] = [];
   reviewPages.forEach((pageHtml, pIdx) => {
     if (!pageHtml) return;
     const $ = cheerio.load(pageHtml);
     $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText, div.ReviewContainer, div[class*="review"]').each((idx, el) => {
-        const text = $(el).text().replace(/\s+/g, ' ').trim();
-        const ratingText = $(el).find('div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').text().trim();
-        const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || (text.toLowerCase().includes('bad') || text.toLowerCase().includes('defect') ? 1 : 4);
-        if (text.length > 15) {
-          combinedReviews.push({
-            id: `rev_fk_${pIdx}_${idx}`,
-            marketplace: 'flipkart',
-            rating: Math.min(5, Math.max(1, parsedRating)),
-            content: text,
-            author: 'Verified Buyer',
-            date: new Date(Date.now() - idx * 43200000).toISOString(),
-            sentiment: parsedRating <= 2 ? 'CRITICAL DEFECT' : parsedRating === 3 ? 'WARNING' : 'OPTIMAL',
-            isSuspicious: parsedRating <= 2 && idx % 3 === 0
-          });
-        }
+      const text = $(el).text().replace(/\s+/g, ' ').trim();
+      const ratingText = $(el).find('div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').text().trim();
+      const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || (text.toLowerCase().includes('bad') || text.toLowerCase().includes('defect') ? 1 : 4);
+      if (text.length > 15) {
+        reviews.push({
+          id: `rev_fk_${pIdx}_${idx}`,
+          marketplace: 'flipkart',
+          rating: Math.min(5, Math.max(1, parsedRating)),
+          content: text,
+          author: 'Verified Buyer',
+          date: new Date(Date.now() - idx * 43200000).toISOString(),
+          sentiment: parsedRating <= 2 ? 'CRITICAL DEFECT' : parsedRating === 3 ? 'WARNING' : 'OPTIMAL',
+          isSuspicious: parsedRating <= 2 && idx % 3 === 0
+        });
+      }
     });
   });
 
   return {
-    title: title || 'Product Audit',
-    price: extractedPrice,
-    reviews: combinedReviews
+    title: title || 'Flipkart Product Audit',
+    price: price > 0 ? price : 0,
+    reviews
   };
 }

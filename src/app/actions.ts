@@ -1,6 +1,6 @@
 "use server";
 
-import { fetchMarketplaceReviews, scrapeFlipkart, calculateAuditCreditCost } from "@/lib/scraper";
+import { fetchMarketplaceReviews, scrapeFlipkart, calculateAuditCreditCost, parseMetadataFromUrl } from "@/lib/scraper";
 import { analyzeReviewSentiment, generateHeadToHeadComparison } from "@/lib/ai";
 import { generateTemporalVarianceIntelligence } from "@/lib/gemini";
 import { createClient } from "@/utils/supabase/server";
@@ -100,18 +100,40 @@ export async function analyzeUrlsAction(
       let scrapeResult;
       
       if (url.includes('flipkart.com')) {
-        const customRes = await scrapeFlipkart(url);
-        scrapeResult = {
-          success: true,
-          scrapedLive: true,
-          marketplace: 'flipkart' as any,
-          url: url,
-          reviews: customRes.reviews,
-          productTitle: customRes.title,
-          price: `₹${customRes.price}`,
-          brand: 'Campus',
-          category: 'Footwear',
-        };
+        try {
+          const customRes = await scrapeFlipkart(url);
+          const meta = parseMetadataFromUrl(url, 'flipkart');
+          
+          if (!customRes || (!customRes.reviews?.length && !customRes.price)) {
+            scrapeResult = {
+              success: false,
+              marketplace: 'flipkart' as any,
+              url,
+              reviews: [],
+              error: 'Failed to extract live product data or reviews from Flipkart.'
+            };
+          } else {
+            scrapeResult = {
+              success: true,
+              scrapedLive: true,
+              marketplace: 'flipkart' as any,
+              url: url,
+              reviews: customRes.reviews,
+              productTitle: customRes.title || meta.title,
+              price: customRes.price > 0 ? `₹${customRes.price}` : '',
+              brand: meta.brand || 'Seller Brand',
+              category: meta.category || 'General',
+            };
+          }
+        } catch (err: any) {
+          scrapeResult = {
+            success: false,
+            marketplace: 'flipkart' as any,
+            url,
+            reviews: [],
+            error: err?.message || 'Flipkart dynamic anti-block scraping failed.'
+          };
+        }
       } else {
         scrapeResult = await fetchMarketplaceReviews(url);
       }
