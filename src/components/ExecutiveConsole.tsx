@@ -25,7 +25,7 @@ export default function ExecutiveConsole({
   const priceMatch = String(rawPriceStr).match(/(?:₹|Rs\.?)\s*([0-9,]+)/i) || String(rawPriceStr).match(/([0-9,]+)/);
   const extractedNumericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
 
-  const defaultASP = extractedNumericPrice > 0 
+  const defaultASP = extractedNumericPrice > 20 
     ? extractedNumericPrice 
     : (/saree|kurti|kurta|lehenga|dress|gown/i.test(titleLower) ? 499 : /phone|galaxy|5g|laptop|smartphone|macbook|ipad|iphone|tablet/i.test(titleLower) ? 12999 : 999);
 

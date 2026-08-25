@@ -558,12 +558,11 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
         pPrice = priceMatch ? `₹${priceMatch[1]}` : "";
       }
       
-      // STRICT VALIDATION: If parsed price <= 20, regex extract full currency integer
+      // STRICT VALIDATION: NEVER let price be <= 20 (shoe sizes)
       if (pPrice) {
         const cleanVal = pPrice.replace(/[^0-9.]/g, '');
         const floatVal = parseFloat(cleanVal);
         if (cleanVal && !isNaN(floatVal) && floatVal <= 20) {
-          // Reject immediately, it is shoe size 6, 7, 8
           pPrice = "";
         } else if (cleanVal && !isNaN(floatVal)) {
            pPrice = `₹${Math.round(floatVal)}`;
@@ -571,9 +570,15 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       }
       
       if (!pPrice || pPrice === "") {
-        const priceMatch = (html || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i);
-        if (priceMatch) {
-          pPrice = `₹${priceMatch[1]}`;
+        // Fallback to meta itemprop="price" or regex ₹([0-9,]+)
+        const metaPrice = $('meta[itemprop="price"]').attr('content');
+        if (metaPrice && parseFloat(metaPrice) > 20) {
+          pPrice = `₹${Math.round(parseFloat(metaPrice))}`;
+        } else {
+          const priceMatch = (html || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i);
+          if (priceMatch && parseInt(priceMatch[1].replace(/,/g, ''), 10) > 20) {
+            pPrice = `₹${priceMatch[1]}`;
+          }
         }
       }
 
