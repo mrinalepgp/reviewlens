@@ -1,0 +1,1 @@
+refactor(core): implement 100% dynamic data extraction for flipkart scraper
