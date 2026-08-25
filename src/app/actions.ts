@@ -104,13 +104,13 @@ export async function analyzeUrlsAction(
           const customRes = await scrapeFlipkart(url);
           const meta = parseMetadataFromUrl(url, 'flipkart');
           
-          if (!customRes || (!customRes.reviews?.length && !customRes.price)) {
+          if (!customRes || !customRes.price || !customRes.reviews?.length) {
             scrapeResult = {
               success: false,
               marketplace: 'flipkart' as any,
               url,
               reviews: [],
-              error: 'Failed to extract live product data or reviews from Flipkart.'
+              error: 'Failed to extract live product price or reviews from Flipkart.'
             };
           } else {
             scrapeResult = {

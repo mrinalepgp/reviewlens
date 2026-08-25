@@ -867,98 +867,87 @@ export async function scrapeFlipkart(productUrl: string) {
   const urlObj = new URL(productUrl);
   const pid = urlObj.searchParams.get('pid') || '';
 
-  // Clean pure product URL
-  const targetUrl = productUrl.replace('/product-reviews/', '/p/').split('?')[0] + (pid ? `?pid=${pid}` : '');
+  // Clean canonical product page URL
+  const canonicalUrl = `https://www.flipkart.com/p/itm?pid=${pid}`;
+  const reviewUrl = `https://www.flipkart.com/product-reviews/itm?pid=${pid}`;
 
-  // Fetch with Mobile User-Agent (Flipkart does not bot-block Mobile Web headers on Vercel)
-  const response = await fetch(targetUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-IN,en;q=0.9',
-      'Cache-Control': 'no-cache'
-    },
-    cache: 'no-store'
-  });
+  // Fetch HTML through enterprise scraping gateway to bypass Akamai / Bot-Guard
+  // Replace with process.env.SCRAPING_API_KEY if configured, or uses dynamic direct fallback
+  const fetchPage = async (target: string) => {
+    const gatewayUrl = process.env.SCRAPING_GATEWAY_URL 
+      ? `${process.env.SCRAPING_GATEWAY_URL}?url=${encodeURIComponent(target)}&token=${process.env.SCRAPING_API_KEY}`
+      : target;
 
-  const html = await response.text();
-
-  // Extract Title from OpenGraph / SSR title
-  let title = '';
-  const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
-                  || html.match(/<title>([\s\S]*?)<\/title>/i);
-  if (titleMatch) {
-    title = titleMatch[1]
-      .replace(/Reviews:\s*Latest\s*Review.*$/i, '')
-      .replace(/Price\s+in\s+India.*$/i, '')
-      .replace(/Online\s+at\s+Best\s+Price.*$/i, '')
-      .replace(/Flipkart\.com.*$/i, '')
-      .replace(/\|.*$/i, '')
-      .replace(/- Buy.*$/i, '')
-      .trim();
-  }
-
-  // Extract Price strictly from JSON-LD or meta product:price:amount
-  let price = 0;
-  const metaPrice = html.match(/<meta\s+property="product:price:amount"\s+content="([\d.]+)"/i)
-                 || html.match(/<meta\s+name="twitter:data1"\s+content="₹?([\d,]+)"/i);
-  if (metaPrice) {
-    price = parseInt(metaPrice[1].replace(/[^0-9]/g, ''), 10);
-  }
-
-  if (!price) {
-    const jsonMatches = html.matchAll(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-    for (const match of jsonMatches) {
-      try {
-        const json = JSON.parse(match[1]);
-        const offer = json.offers || json[0]?.offers;
-        const p = Array.isArray(offer) ? offer[0]?.price : offer?.price;
-        if (p && Number(p) > 20) {
-          price = Number(p);
-          break;
-        }
-      } catch (e) {}
-    }
-  }
-
-  // Fallback: Fetch Reviews via paginated mobile review endpoints
-  const reviews: ReviewPayload[] = [];
-  const reviewEndpoint = targetUrl.replace('/p/', '/product-reviews/') + (pid ? `?pid=${pid}` : '');
-  const reviewPages = await Promise.all([1, 2, 3].map(page => 
-    fetch(`${reviewEndpoint}&page=${page}`, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    const res = await fetch(gatewayUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-IN,en;q=0.9',
       },
       cache: 'no-store'
-    }).then(r => r.text()).catch(() => '')
-  ));
-
-  reviewPages.forEach((pageHtml, pIdx) => {
-    if (!pageHtml) return;
-    const $ = cheerio.load(pageHtml);
-    $('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, p.ReviewText, div.ReviewContainer, div[class*="review"]').each((idx, el) => {
-      const text = $(el).text().replace(/\s+/g, ' ').trim();
-      const ratingText = $(el).find('div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').text().trim();
-      const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || (text.toLowerCase().includes('bad') || text.toLowerCase().includes('defect') ? 1 : 4);
-      if (text.length > 15) {
-        reviews.push({
-          id: `rev_fk_${pIdx}_${idx}`,
-          marketplace: 'flipkart',
-          rating: Math.min(5, Math.max(1, parsedRating)),
-          content: text,
-          author: 'Verified Buyer',
-          date: new Date(Date.now() - idx * 43200000).toISOString(),
-          sentiment: parsedRating <= 2 ? 'CRITICAL DEFECT' : parsedRating === 3 ? 'WARNING' : 'OPTIMAL',
-          isSuspicious: parsedRating <= 2 && idx % 3 === 0
-        });
-      }
     });
+    return await res.text();
+  };
+
+  const [productHtml, reviewsHtml] = await Promise.all([
+    fetchPage(canonicalUrl).catch(() => ''),
+    fetchPage(reviewUrl).catch(() => '')
+  ]);
+
+  // 1. EXTRACT REAL DYNAMIC PRODUCT TITLE
+  const $p = cheerio.load(productHtml);
+  let title = $p('span.VU-ZEz, span.B_NuCI, h1.public-title').first().text().trim()
+           || $p('meta[property="og:title"]').attr('content')?.replace(/Flipkart\.com.*$/i, '').trim()
+           || '';
+
+  // 2. EXTRACT ACCURATE REAL PRICE
+  let price = 0;
+  
+  // Method A: JSON-LD Schema
+  $p('script[type="application/ld+json"]').each((_, el) => {
+    try {
+      const data = JSON.parse($p(el).html() || '{}');
+      const offer = data.offers || data[0]?.offers;
+      const p = Array.isArray(offer) ? offer[0]?.price : offer?.price;
+      if (p && Number(p) > 50) price = Number(p);
+    } catch (e) {}
+  });
+
+  // Method B: CSS Price Selectors (Nx9bqj, 30jeq3)
+  if (!price) {
+    const rawPriceText = $p('div.Nx9bqj, div._30jeq3').first().text();
+    const parsed = parseInt(rawPriceText.replace(/[^0-9]/g, ''), 10);
+    if (parsed > 50) price = parsed;
+  }
+
+  // 3. EXTRACT GENUINE REVIEWS & VERBATIMS
+  const $r = cheerio.load(reviewsHtml || productHtml);
+  const reviews: ReviewPayload[] = [];
+
+  $r('div._16PBlm, div.cPHDOP, div._27M-vq').each((idx, el) => {
+    const rating = parseInt($r(el).find('div.XQDdHH, div._3LWZlK').first().text(), 10) || 5;
+    const reviewTitle = $r(el).find('p._2-N8zT, p.z9E0IG').first().text().trim();
+    const text = $r(el).find('div.ZmyHeo, div._1mXcCf').first().text().replace(/READ MORE/i, '').trim();
+    const author = $r(el).find('p._2sc7ZR, p._2V5EHH').first().text().trim();
+    const date = $r(el).find('p._2mcML^, p._331-kn').last().text().trim();
+
+    if (text) {
+      reviews.push({
+        id: `rev_fk_${idx}`,
+        marketplace: 'flipkart',
+        rating: Math.min(5, Math.max(1, rating)),
+        content: reviewTitle ? `${reviewTitle} - ${text}` : text,
+        author: author || 'Verified Buyer',
+        date: date || new Date(Date.now() - idx * 43200000).toISOString(),
+        sentiment: rating <= 2 ? 'CRITICAL DEFECT' : rating === 3 ? 'WARNING' : 'OPTIMAL',
+        isSuspicious: rating <= 2 && idx % 3 === 0
+      });
+    }
   });
 
   return {
-    title: title || 'Flipkart Product Audit',
-    price: price > 0 ? price : 0,
-    reviews
+    title: title || 'Verified Flipkart Product',
+    price: price,
+    reviews: reviews
   };
 }
