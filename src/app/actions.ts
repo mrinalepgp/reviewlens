@@ -203,7 +203,7 @@ export async function analyzeUrlsAction(
         const capitalProtected = safeIntelligenceData.executiveScorecard?.estimatedCapitalProtected || 134850;
         const clusters = safeIntelligenceData.defectTaxonomy || [];
 
-        // 1. Explicitly await insert into 'analyses' table in Supabase bound to user.id
+        // 1. Explicitly await insert into 'analyses' table in Supabase bound to user!.id
         try {
           const insertPayload: any = {
             user_id: user!.id,
@@ -555,9 +555,9 @@ export async function deleteProductAction(productId: string) {
     if (!user) throw new Error("Unauthorized");
 
     // Delete from primary analyses table
-    await supabase.from('analyses').delete().eq('id', productId).eq('user_id', user.id);
+    await supabase.from('analyses').delete().eq('id', productId).eq('user_id', user!.id);
     // Also delete from legacy tracked_products
-    await supabase.from('tracked_products').delete().eq('id', productId).eq('user_id', user.id);
+    await supabase.from('tracked_products').delete().eq('id', productId).eq('user_id', user!.id);
 
     return { success: true };
   } catch (err: any) {
@@ -573,8 +573,8 @@ export async function clearAllHistoryAction() {
     if (!user) throw new Error("Unauthorized");
 
     // Clear from both tables
-    await supabase.from('analyses').delete().eq('user_id', user.id);
-    await supabase.from('tracked_products').delete().eq('user_id', user.id);
+    await supabase.from('analyses').delete().eq('user_id', user!.id);
+    await supabase.from('tracked_products').delete().eq('user_id', user!.id);
 
     return { success: true };
   } catch (err: any) {
@@ -602,13 +602,13 @@ export async function updateUserProfileAction(fullName: string, whatsappNumber: 
     const { error: authErr } = await supabase.auth.updateUser(updatePayload);
     if (authErr) throw authErr;
 
-    const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user.id);
+    const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user!.id);
     if (profErr) throw profErr;
 
     const { error: sellErr } = await supabase.from('sellers').update({ 
       full_name: fullName,
       whatsapp_number: whatsappNumber
-    }).eq('id', user.id);
+    }).eq('id', user!.id);
     if (sellErr) throw sellErr;
 
     return { success: true };
@@ -624,9 +624,9 @@ export async function wipeUserAccountAction() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Unauthorized");
 
-    await supabase.from('tracked_products').delete().eq('user_id', user.id);
-    await supabase.from('sellers').delete().eq('id', user.id);
-    await supabase.from('user_profiles').delete().eq('id', user.id);
+    await supabase.from('tracked_products').delete().eq('user_id', user!.id);
+    await supabase.from('sellers').delete().eq('id', user!.id);
+    await supabase.from('user_profiles').delete().eq('id', user!.id);
 
     return { success: true };
   } catch (err: any) {
