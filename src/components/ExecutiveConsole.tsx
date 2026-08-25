@@ -21,20 +21,22 @@ export default function ExecutiveConsole({
   const titleLower = (product.title || "").toLowerCase();
   const rawPriceStr = product.price || (product as any).price || (product as any).asp || intelligence.price || (product as any).product_price || intelligence.executiveScorecard?.price || "";
   
-  // Extract clean numeric price (e.g. "₹398" -> 398)
+  // Extract clean numeric price (e.g. "₹1108" -> 1108)
   const priceMatch = String(rawPriceStr).match(/(?:₹|Rs\.?)\s*([0-9,]+)/i) || String(rawPriceStr).match(/([0-9,]+)/);
   const extractedNumericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
+  const activeASP = extractedNumericPrice || (product as any).price || (product as any).asp || 0;
 
   // Calculator & Action Suite State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
-  const [asp, setAsp] = useState<number>(() => extractedNumericPrice);
+  const [asp, setAsp] = useState<number>(() => (typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0));
   const [returnCost, setReturnCost] = useState<number>(180);
   const [timeRange, setTimeRange] = useState<'ALL' | '30D' | '90D' | '1Y'>('ALL');
   const [showSafeHarborModal, setShowSafeHarborModal] = useState(false);
 
   useEffect(() => {
-    setAsp(extractedNumericPrice);
-  }, [product.id, extractedNumericPrice]);
+    const numPrice = typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0;
+    setAsp(numPrice);
+  }, [product.id, product.price, (product as any).asp, activeASP]);
 
   const handleExportPDF = () => {
     setIsExportingPDF(true);

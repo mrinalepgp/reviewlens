@@ -1,6 +1,6 @@
 {
   "node": {
-    "60601283a78ca3d431b74075cfe21fc04662de1eaf": {
+    "605f274027feffe35b5452f3c98697a4a90548cc8c": {
       "workers": {
         "app/dashboard/page": {
           "moduleId": 9161,
@@ -12,7 +12,7 @@
       "exportedName": "analyzeUrlsAction",
       "filename": "src/app/actions.ts"
     },
-    "00fa721a42c0baf9ad9554cb6f4d475541f0580811": {
+    "00000e6e4cc935ae273a5dbce7a90afa506c0b3132": {
       "workers": {
         "app/dashboard/page": {
           "moduleId": 9161,
@@ -24,7 +24,7 @@
       "exportedName": "fetchDashboardStateAction",
       "filename": "src/app/actions.ts"
     },
-    "40a0228f5e795490a824c1691bdb52f448a0d0d632": {
+    "407b8da27bbc51e72ddae35d5b902fd6a3dfb80106": {
       "workers": {
         "app/dashboard/page": {
           "moduleId": 9161,
@@ -36,7 +36,7 @@
       "exportedName": "deleteProductAction",
       "filename": "src/app/actions.ts"
     },
-    "7c34288727b154100ee1e82e7f6754eb253deb4abf": {
+    "7c7c67508147fae4a5829fa80413b3e524dbce5ae6": {
       "workers": {
         "app/dashboard/page": {
           "moduleId": 9161,
@@ -48,7 +48,7 @@
       "exportedName": "updateUserProfileAction",
       "filename": "src/app/actions.ts"
     },
-    "00c5426865a617d7f018e28235d3df56df2c7f437e": {
+    "00af0167ed6f425232e20610a960c4bc11f02ca746": {
       "workers": {
         "app/dashboard/page": {
           "moduleId": 9161,

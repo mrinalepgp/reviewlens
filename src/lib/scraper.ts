@@ -888,7 +888,14 @@ export async function scrapeFlipkart(productUrl: string) {
   const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
                   || html.match(/<title>([\s\S]*?)<\/title>/i);
   if (titleMatch) {
-    title = titleMatch[1].replace(/Flipkart\.com.*$/i, '').replace(/\|.*$/i, '').trim();
+    title = titleMatch[1]
+      .replace(/Reviews:\s*Latest\s*Review.*$/i, '')
+      .replace(/Price\s+in\s+India.*$/i, '')
+      .replace(/Online\s+at\s+Best\s+Price.*$/i, '')
+      .replace(/Flipkart\.com.*$/i, '')
+      .replace(/\|.*$/i, '')
+      .replace(/- Buy.*$/i, '')
+      .trim();
   }
 
   // Extract Price strictly from JSON-LD or meta product:price:amount

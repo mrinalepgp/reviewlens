@@ -1,0 +1,1 @@
+fix(frontend): remove mock title templates and bind modal directly to live scraped ASP
