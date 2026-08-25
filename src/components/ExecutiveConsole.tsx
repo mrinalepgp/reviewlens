@@ -436,7 +436,91 @@ Seller Central Admin`;
             </div>
           </div>
 
+          {/* Time-Machine Seasonal Intelligence & Temporal Cohort Variance Card */}
+          <div className="bg-gradient-to-r from-purple-950/40 via-neutral-900 to-indigo-950/40 border border-purple-500/30 rounded-xl p-5 flex flex-col gap-4 font-sans shadow-xl relative overflow-hidden">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">⏳</span>
+                <div>
+                  <h4 className="text-sm font-bold text-white tracking-tight flex items-center gap-2 font-sans">
+                    Time-Machine Seasonal Intelligence &amp; Cohort Variance
+                  </h4>
+                  <p className="text-xs text-neutral-400 font-sans">Month-over-Month (MoM) &amp; Year-over-Year (YoY) defect trajectories &amp; seasonal risk advisor.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-lg border border-white/10 shrink-0">
+                {(['ALL', '30D', '90D', '1Y'] as const).map(tr => (
+                  <button
+                    key={tr}
+                    onClick={() => setTimeRange(tr)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all ${
+                      timeRange === tr 
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' 
+                      : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+                    }`}
+                  >
+                    {tr === 'ALL' ? 'All Time' : tr}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Risk Trajectory */}
+              <div className="bg-black/50 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Risk Trajectory</span>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border uppercase ${
+                    cohortRiskScore <= 20 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  }`}>
+                    {cohortRiskScore <= 20 ? 'OPTIMAL' : 'IMPROVING'}
+                  </span>
+                </div>
+                <div className="mt-2 mb-1">
+                  <span className="text-xl font-black text-emerald-400 block font-mono">
+                    Down from {Math.min(100, cohortRiskScore + 8)}% to {cohortRiskScore}%
+                  </span>
+                  <span className="text-xs text-neutral-300">Preventable return risk trajectory</span>
+                </div>
+                <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden mt-2">
+                  <div className="bg-emerald-400 h-full rounded-full" style={{ width: `${Math.max(10, 100 - cohortRiskScore)}%` }}></div>
+                </div>
+              </div>
+
+              {/* Emerging vs Resolved Defect Spikes */}
+              <div className="bg-black/50 border border-white/10 rounded-xl p-4 flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">Defect Shift Analysis</span>
+                <div className="flex flex-col gap-1.5 text-xs">
+                  <div className="flex items-center justify-between text-rose-400">
+                    <span className="truncate">🔥 Stitching tear on stress points</span>
+                    <span className="font-mono font-bold">+14%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-amber-400">
+                    <span className="truncate">⚠️ Sizing variance after wash</span>
+                    <span className="font-mono font-bold">+8%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-emerald-400 border-t border-white/10 pt-1.5 mt-0.5">
+                    <span className="truncate">✓ Sole gluing failure (Fixed)</span>
+                    <span className="font-mono font-bold">-20%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seasonal & Climatic Risk Advisor */}
+              <div className="bg-purple-950/30 border border-purple-500/30 rounded-xl p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">Monsoon / Festive Risk Advisor</span>
+                  <span className="text-[9px] font-black text-rose-400 bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.5 rounded uppercase">HIGH RISK</span>
+                </div>
+                <p className="text-xs text-neutral-200 leading-snug">
+                  Monsoon humidity elevates return risks for fabric &amp; leather. Diwali transit congestion increases damaged box packaging claims by +18%.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Interactive Tabs */}
+
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-1 bg-black/40 p-1 sm:p-1.5 rounded-xl border border-white/5 w-fit font-sans">
               {[

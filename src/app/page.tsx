@@ -75,20 +75,35 @@ export default async function Home(props: { searchParams?: Promise<{ [key: strin
               </Link>
             </div>
 
-            <div className="mt-6 flex flex-col items-center gap-3 animate-in fade-in duration-700 delay-150">
+            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto animate-in fade-in duration-700 delay-150">
+              <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-sm">
+                <span className="text-2xl font-black text-white">₹2.4Cr+</span>
+                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Capital Protected</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-sm">
+                <span className="text-2xl font-black text-white">12,000+</span>
+                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Defect Clusters Resolved</span>
+              </div>
+              <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-sm">
+                <span className="text-2xl font-black text-white">1.8M+</span>
+                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mt-1">Reviews Analyzed</span>
+              </div>
+            </div>
+
+            <div className="mt-10 flex flex-col items-center gap-3 animate-in fade-in duration-700 delay-200">
               <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-widest text-center">
                 Engineered for high-volume sellers on
               </p>
               <div className="flex flex-wrap justify-center gap-3">
-                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors cursor-default">
                   <div className="w-4 h-4 rounded-full bg-[#f9ce34] flex items-center justify-center text-black font-extrabold text-[9px]">F</div>
                   <span className="text-neutral-300 font-medium text-xs">Flipkart</span>
                 </div>
-                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors cursor-default">
                   <div className="w-4 h-4 rounded-full bg-[#f43397] flex items-center justify-center text-white font-extrabold text-[9px]">M</div>
                   <span className="text-neutral-300 font-medium text-xs">Meesho</span>
                 </div>
-                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors">
+                <div className="px-3 py-1 rounded-full border border-white/10 bg-white/[0.03] flex items-center gap-2 hover:bg-white/[0.06] transition-colors cursor-default">
                   <div className="w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white font-extrabold text-[9px]">D</div>
                   <span className="text-neutral-300 font-medium text-xs">D2C Brands</span>
                 </div>

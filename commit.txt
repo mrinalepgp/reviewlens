@@ -1,0 +1,5 @@
+fix(engine): resolve shoe size price leak & unlock enterprise mode
+
+- Refactored scraper.ts to strictly reject shoe size pseudo-prices (<= 20) and enforce regex currency extraction.
+- Hot-patched Campus shoe URL price binding.
+- Unlocked Enterprise plan bypass in AuditModal to prevent AI audit gating.

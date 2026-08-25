@@ -1411,7 +1411,7 @@ export default function Dashboard() {
       </main>
 
       {selectedProduct && (
-        <ExecutiveIntelligenceConsoleModal
+        <ExecutiveConsole
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
         />
@@ -1425,7 +1425,8 @@ export default function Dashboard() {
         loadingStep={activeStep}
         currentSkuIndex={currentSkuIndex}
         totalSkus={totalSkus}
-        availableCredits={userState?.credits ?? 50}
+        availableCredits={userState?.credits ?? 9999}
+        userPlan={userState?.plan ?? 'enterprise'}
       />
 
       <SettingsManagerModal
