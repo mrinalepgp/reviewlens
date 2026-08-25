@@ -1,0 +1,1 @@
+fix(ai): remove hardcoded fabric defect prompt, title templates, and schema defaults

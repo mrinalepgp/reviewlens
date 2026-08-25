@@ -106,17 +106,17 @@ export async function generateTemporalVarianceIntelligence(
       headline
     },
     emergingDefects: [
-      { flaw: "Stitching tear on stress points", spikePercentage: 14, status: "EMERGING" },
-      { flaw: "Sizing mismatch after wash", spikePercentage: 8, status: "EMERGING" }
+      { flaw: "Core component or structural failure", spikePercentage: 14, status: "EMERGING" },
+      { flaw: "Performance or specification mismatch", spikePercentage: 8, status: "EMERGING" }
     ],
     resolvedDefects: [
-      { flaw: "Sole gluing failure", spikePercentage: -20, status: "RESOLVED" },
-      { flaw: "Color bleeding", spikePercentage: -12, status: "RESOLVED" }
+      { flaw: "Manufacturing assembly defect", spikePercentage: -20, status: "RESOLVED" },
+      { flaw: "Cosmetic or finish issues", spikePercentage: -12, status: "RESOLVED" }
     ],
     seasonalAdvisor: {
-      season: "Monsoon / Festive Peak",
+      season: "Current Transit Season",
       title: "Climatic & Seasonal Logistics Risk",
-      advisory: "Monsoon humidity elevates return risks for fabric & leather. Diwali transit congestion increases damaged box packaging claims by +18%.",
+      advisory: "Extreme weather or transit congestion currently elevates packaging damage and handling-related return claims.",
       riskLevel: "HIGH"
     }
   };
@@ -129,7 +129,7 @@ export async function generateTemporalVarianceIntelligence(
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      systemInstruction: "You are an expert e-commerce seasonal intelligence & temporal variance analyst for Indian sellers on Flipkart/Meesho. Compare current vs previous period review cohorts and output detailed temporal intelligence.",
+      systemInstruction: "You are an expert e-commerce seasonal intelligence & temporal variance analyst. Extract product category automatically (e.g. Smartphone, Laptop, Footwear, Appliance). Generate emerging defect spikes strictly based on actual customer complaints for that specific category (e.g., for Smartphones: Battery drain, Heating, Camera blur). Compare current vs previous period review cohorts and output detailed temporal intelligence.",
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: TEMPORAL_SCHEMA,

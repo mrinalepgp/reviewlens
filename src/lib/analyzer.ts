@@ -182,7 +182,7 @@ DYNAMIC AI INSTRUCTIONS (100% CATEGORY-AGNOSTIC):
    - reviewsCount should be a realistic number (e.g., 4200, 8500, 3100), NOT small round numbers.
    - benchmarkRisk should be a realistic percentage (e.g., 8.5, 11.2, 14.8).
 3. Extract 3 to 5 comprehensive, product-specific defect clusters, root cause diagnostics, factory fix actions, listing gap alerts, and native vernacular/Hinglish phrase decodes strictly tailored to this product and its category. Never output cross-domain terms!
-4. CRITICAL VERNACULAR QUOTE RULE: In 'rawVernacularText' and 'context', strip out redundant long product keyword titles so the quote reads naturally as authentic customer voice (e.g. 'Fabric is very thin (low GSM). Color bled heavily in first hand wash...'). Never include full product titles or catalog SEO noise inside quotes!
+4. CRITICAL VERNACULAR QUOTE RULE: In 'rawVernacularText' and 'context', strip out redundant long product keyword titles so the quote reads naturally as authentic customer voice (e.g. 'The product stopped working after two days of usage...'). Never include full product titles or catalog SEO noise inside quotes!
 5. keyTakeaways: Generate exactly 2 strategic takeaways that directly reference the competitor brands by name AND cite specific review-driven insights from the audited product. Do NOT use generic template language.
 
 Return raw JSON ONLY matching this schema:
