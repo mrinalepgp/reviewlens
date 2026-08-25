@@ -1,0 +1,17 @@
+{
+  "node": {
+    "4071d5c47f44f0ec316fd1db5957439f33430853e1": {
+      "workers": {
+        "app/signup/page": {
+          "moduleId": 59249,
+          "async": false,
+          "exportedName": "signup",
+          "filename": "src/app/signup/actions.ts"
+        }
+      },
+      "exportedName": "signup",
+      "filename": "src/app/signup/actions.ts"
+    }
+  },
+  "edge": {}
+}

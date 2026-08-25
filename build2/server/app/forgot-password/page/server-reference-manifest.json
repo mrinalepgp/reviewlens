@@ -1,0 +1,17 @@
+{
+  "node": {
+    "40b8202576488dd61fd40e690bdecfee8e56c4c9a4": {
+      "workers": {
+        "app/forgot-password/page": {
+          "moduleId": 95151,
+          "async": false,
+          "exportedName": "sendResetLink",
+          "filename": "src/app/forgot-password/actions.ts"
+        }
+      },
+      "exportedName": "sendResetLink",
+      "filename": "src/app/forgot-password/actions.ts"
+    }
+  },
+  "edge": {}
+}

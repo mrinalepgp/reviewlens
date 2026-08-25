@@ -1,0 +1,65 @@
+{
+  "node": {
+    "60d79e149f0f49aff7f0c17d6af1559865672057fd": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": 9161,
+          "async": false,
+          "exportedName": "analyzeUrlsAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "analyzeUrlsAction",
+      "filename": "src/app/actions.ts"
+    },
+    "004a16cab99af681cd88a0477c9647f47d9a70c1cd": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": 9161,
+          "async": false,
+          "exportedName": "fetchDashboardStateAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "fetchDashboardStateAction",
+      "filename": "src/app/actions.ts"
+    },
+    "406da18539fb95ebf0c619432fb92d152829348891": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": 9161,
+          "async": false,
+          "exportedName": "deleteProductAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "deleteProductAction",
+      "filename": "src/app/actions.ts"
+    },
+    "7cddef820ea94d6b131afa81c63fd6f810e018850f": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": 9161,
+          "async": false,
+          "exportedName": "updateUserProfileAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "updateUserProfileAction",
+      "filename": "src/app/actions.ts"
+    },
+    "00c2ddf419b197da777a21678da4da8dc4c93d61c4": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": 9161,
+          "async": false,
+          "exportedName": "wipeUserAccountAction",
+          "filename": "src/app/actions.ts"
+        }
+      },
+      "exportedName": "wipeUserAccountAction",
+      "filename": "src/app/actions.ts"
+    }
+  },
+  "edge": {}
+}

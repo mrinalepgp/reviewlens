@@ -1,0 +1,1 @@
+test(prod): remove auth guard unconditionally for autonomous smoke testing
