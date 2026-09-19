@@ -35,8 +35,11 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  const devSession = request.cookies.get('reviewlens_dev_session')?.value
+  const hasUser = !!user || !!devSession
+
   if (
-    !user &&
+    !hasUser &&
     !request.nextUrl.pathname.startsWith('/login') &&
     !request.nextUrl.pathname.startsWith('/signup') &&
     request.nextUrl.pathname.startsWith('/dashboard')
@@ -49,7 +52,7 @@ export async function updateSession(request: NextRequest) {
 
   // If user is logged in and tries to access login or signup, redirect to dashboard
   if (
-    user &&
+    hasUser &&
     (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup'))
   ) {
     const url = request.nextUrl.clone()

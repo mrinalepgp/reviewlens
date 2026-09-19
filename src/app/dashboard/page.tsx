@@ -1039,7 +1039,14 @@ export default function Dashboard() {
     }
   };
 
-  const handleAnalyze = async (urls: string[]) => {
+  const isFreeUser = (userState?.plan || '').toLowerCase() === 'free' || (userState?.plan || '').toLowerCase() === 'hobby';
+
+  const handleAnalyze = async (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean }) => {
+    if (isFreeUser && analyses.length + urls.length > 3) {
+      setError(`Free tier limit reached: Free accounts can analyze a maximum of 3 product links total (currently using ${analyses.length}/3). Please upgrade to Growth Seller for unlimited product links.`);
+      return;
+    }
+
     setIsLoading(true);
     setActiveStep(1);
     setError(null);
@@ -1052,7 +1059,7 @@ export default function Dashboard() {
 
     try {
       const response = await Promise.race([
-        analyzeUrlsAction(urls),
+        analyzeUrlsAction(urls, options),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("TIMEOUT_90S")), 90000)
         )
@@ -1212,8 +1219,13 @@ export default function Dashboard() {
   };
 
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    try {
+      document.cookie = "reviewlens_dev_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
     window.location.href = '/login';
   };
 
@@ -1259,8 +1271,17 @@ export default function Dashboard() {
             </button>
 
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-neutral-900 border border-white/10 rounded-lg cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => setIsSettingsModalOpen(true)}>
-              <span className="text-xs font-bold text-amber-400">⚡ {Math.max(0, 50 - analyses.length)}/50</span>
-              <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
+              {isFreeUser ? (
+                <>
+                  <span className={`text-xs font-bold ${analyses.length >= 3 ? 'text-rose-400' : 'text-amber-400'}`}>⚡ {analyses.length}/3</span>
+                  <span className="text-xs text-neutral-400 font-medium hidden sm:block">Product Links</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-bold text-emerald-400">⚡ Unlimited</span>
+                  <span className="text-xs text-neutral-400 font-medium hidden sm:block">Credits</span>
+                </>
+              )}
             </div>
 
             <div className="relative">
@@ -1414,19 +1435,30 @@ export default function Dashboard() {
         <ExecutiveConsole
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
+          userPlan={userState?.plan ?? 'enterprise'}
+          onUpgrade={() => {
+            setSelectedProduct(null);
+            setIsSettingsModalOpen(true);
+          }}
         />
       )}
 
       <SmartIngestionModal
         isOpen={isIngestionModalOpen}
         onClose={() => setIsIngestionModalOpen(false)}
-        onAnalyze={(urls) => { handleAnalyze(urls); }}
+        onAnalyze={(urls, options) => { handleAnalyze(urls, options); }}
         isLoading={isLoading}
         loadingStep={activeStep}
         currentSkuIndex={currentSkuIndex}
         totalSkus={totalSkus}
         availableCredits={userState?.credits ?? 9999}
         userPlan={userState?.plan ?? 'enterprise'}
+        currentProductCount={analyses.length}
+        maxProductsAllowed={isFreeUser ? 3 : Infinity}
+        onUpgrade={() => {
+          setIsIngestionModalOpen(false);
+          setIsSettingsModalOpen(true);
+        }}
       />
 
       <SettingsManagerModal

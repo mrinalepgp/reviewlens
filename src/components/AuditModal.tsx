@@ -12,6 +12,8 @@ export interface AuditModalProps {
   totalSkus?: number;
   availableCredits: number;
   userPlan?: string;
+  currentProductCount?: number;
+  maxProductsAllowed?: number;
   onUpgrade?: () => void;
 }
 
@@ -23,9 +25,10 @@ export default function AuditModal({
   loadingStep = 1,
   availableCredits = 9999,
   userPlan = 'enterprise',
+  currentProductCount = 0,
+  maxProductsAllowed = 3,
   onUpgrade
 }: AuditModalProps) {
-  const [tab, setTab] = useState<'url' | 'csv'>('url');
   const [inputText, setInputText] = useState('');
   
   // Date Range Picker State
@@ -124,6 +127,7 @@ export default function AuditModal({
   if (!isOpen) return null;
 
   const isFreePlan = (userPlan || 'enterprise').toLowerCase() === 'hobby' || (userPlan || '').toLowerCase() === 'free';
+  const isProductLimitReached = isFreePlan && currentProductCount >= maxProductsAllowed;
   const estimatedReviews = estimation?.reviewVolume || 120;
   const estimatedCost = estimation?.creditCost || (1 + (isComparison ? 1 : 0));
 
@@ -131,8 +135,13 @@ export default function AuditModal({
     e.preventDefault();
     if (!inputText.trim()) return;
 
-    // Free Tier Gating check
-    if (isFreePlan && estimatedReviews > 50) {
+    if (isProductLimitReached) {
+      if (onUpgrade) onUpgrade();
+      return;
+    }
+
+    // Free Tier 100 Reviews Gating check
+    if (isFreePlan && estimatedReviews > 100) {
       setShowFreeTierGate(true);
       return;
     }
@@ -140,15 +149,20 @@ export default function AuditModal({
     triggerAudit();
   };
 
-  const triggerAudit = (capped50: boolean = false) => {
+  const triggerAudit = (capped100: boolean = false) => {
     const urls = inputText.split('\n').map(u => u.trim()).filter(u => u.length > 0);
     if (urls.length === 0) return;
 
+    if (isFreePlan && (currentProductCount + urls.length > maxProductsAllowed)) {
+      alert(`Free Plan limit: You can only have up to ${maxProductsAllowed} product links total. You already have ${currentProductCount}.`);
+      return;
+    }
+
     setShowFreeTierGate(false);
     onAnalyze(urls, {
-      startDate,
-      endDate,
-      isComparison
+      startDate: isFreePlan ? undefined : startDate,
+      endDate: isFreePlan ? undefined : endDate,
+      isComparison: isFreePlan ? false : isComparison
     });
   };
 
@@ -164,7 +178,9 @@ export default function AuditModal({
             </div>
             <div>
               <h3 className="text-lg font-bold text-white tracking-tight">Smart Pre-Flight Audit Configurator</h3>
-              <p className="text-xs text-neutral-400">Configure temporal cohorts, compare seasonal variance &amp; review volume credits.</p>
+              <p className="text-xs text-neutral-400">
+                {isFreePlan ? 'Free Tier: Analyze latest 100 reviews per SKU (up to 3 links total).' : 'Configure temporal cohorts, compare seasonal variance & review volume credits.'}
+              </p>
             </div>
           </div>
           <button 
@@ -178,60 +194,77 @@ export default function AuditModal({
 
         <div className="p-6 flex flex-col gap-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
           
-          {/* Tab Switcher */}
-          <div className="flex space-x-1 bg-black/50 p-1 rounded-xl border border-white/5 w-fit">
-            <button
-              type="button"
-              onClick={() => setTab('url')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                tab === 'url' ? 'bg-indigo-600 text-white shadow-md' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Direct Marketplace URL
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('csv')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                tab === 'csv' ? 'bg-indigo-600 text-white shadow-md' : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              Bulk Catalog CSV
-            </button>
-          </div>
-
-          {tab === 'url' ? (
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Product URL(s)</label>
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                disabled={isLoading}
-                placeholder="Paste Meesho or Flipkart product URL...&#10;https://meesho.com/s/p/...&#10;https://flipkart.com/product/p/itm..."
-                className="w-full h-24 bg-black/60 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono resize-none"
-              />
-            </div>
-          ) : (
-            <div className="h-24 border-2 border-dashed border-white/10 rounded-xl bg-black/40 flex flex-col items-center justify-center text-center p-4">
-              <span className="text-xs font-bold text-neutral-300">Upload Meesho or Flipkart Catalog CSV</span>
-              <span className="text-[10px] text-neutral-500 mt-1">Parses up to 10,000 product reviews instantly</span>
+          {/* Free Tier Product Limit Warning Banner */}
+          {isFreePlan && (
+            <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+              isProductLimitReached 
+                ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' 
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span>{isProductLimitReached ? '🚫' : 'ℹ️'}</span>
+                <span>
+                  <strong>Free Plan Quota:</strong> {currentProductCount}/{maxProductsAllowed} product links used.
+                  {isProductLimitReached 
+                    ? ' Limit reached. Upgrade to Growth Seller for unlimited product links.' 
+                    : ` (${maxProductsAllowed - currentProductCount} link slot${maxProductsAllowed - currentProductCount === 1 ? '' : 's'} remaining)`}
+                </span>
+              </div>
+              {onUpgrade && (
+                <button
+                  type="button"
+                  onClick={onUpgrade}
+                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors shrink-0"
+                >
+                  Upgrade
+                </button>
+              )}
             </div>
           )}
 
-          {/* Temporal Cohort Date Range Picker */}
-          <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 flex flex-col gap-3">
+          {/* Direct Marketplace URL Input (Bulk CSV tab removed) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                Direct Marketplace URL(s)
+              </label>
+              <span className="text-[10px] text-neutral-500 font-mono">Supports Meesho &amp; Flipkart</span>
+            </div>
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              disabled={isLoading || isProductLimitReached}
+              placeholder="Paste Meesho or Flipkart product URL...&#10;https://meesho.com/s/p/...&#10;https://flipkart.com/product/p/itm..."
+              className="w-full h-24 bg-black/60 border border-white/10 rounded-xl p-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono resize-none disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          {/* Temporal Cohort Date Range Picker (Locked for Free Plan) */}
+          <div className={`border rounded-xl p-4 flex flex-col gap-3 transition-all ${
+            isFreePlan 
+              ? 'bg-neutral-900/40 border-white/5 opacity-75' 
+              : 'bg-white/[0.02] border-white/10'
+          }`}>
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
                 📅 Temporal Cohort Date Range
+                {isFreePlan && (
+                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">
+                    PRO / GROWTH ONLY
+                  </span>
+                )}
               </span>
               <div className="flex gap-1">
                 {(['30D', '90D', 'CUSTOM'] as const).map((p) => (
                   <button
                     key={p}
                     type="button"
+                    disabled={isFreePlan}
                     onClick={() => handlePresetSelect(p)}
                     className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all ${
-                      datePreset === p
+                      isFreePlan
+                        ? 'bg-neutral-900 text-neutral-600 border-white/5 cursor-not-allowed'
+                        : datePreset === p
                         ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
                         : 'bg-black/40 text-neutral-400 border-white/5 hover:border-white/20'
                     }`}
@@ -242,26 +275,46 @@ export default function AuditModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-neutral-400">Start Date</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => { setStartDate(e.target.value); setDatePreset('CUSTOM'); }}
-                  className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
-                />
+            {isFreePlan ? (
+              <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-300">
+                <div className="flex items-center gap-2">
+                  <span>🔒</span>
+                  <p className="text-[11px] leading-snug">
+                    <strong>Date Range Locked:</strong> Free tier audits analyze the latest 100 reviews. Upgrade to filter by date cohorts &amp; unlock seasonal variance.
+                  </p>
+                </div>
+                {onUpgrade && (
+                  <button
+                    type="button"
+                    onClick={onUpgrade}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors shrink-0 ml-2"
+                  >
+                    Unlock
+                  </button>
+                )}
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-semibold text-neutral-400">End Date</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => { setEndDate(e.target.value); setDatePreset('CUSTOM'); }}
-                  className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
-                />
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-neutral-400">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => { setStartDate(e.target.value); setDatePreset('CUSTOM'); }}
+                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-neutral-400">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => { setEndDate(e.target.value); setDatePreset('CUSTOM'); }}
+                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Time-Machine Comparison Toggle */}
@@ -276,9 +329,10 @@ export default function AuditModal({
             </div>
             <button
               type="button"
+              disabled={isFreePlan}
               onClick={() => setIsComparison(!isComparison)}
               className={`w-12 h-6 rounded-full transition-colors relative border border-white/10 ${
-                isComparison ? 'bg-purple-600' : 'bg-neutral-800'
+                isFreePlan ? 'opacity-40 cursor-not-allowed bg-neutral-800' : isComparison ? 'bg-purple-600' : 'bg-neutral-800'
               }`}
             >
               <div className={`absolute top-0.5 left-0.5 bg-white w-5 h-5 rounded-full transition-transform ${isComparison ? 'translate-x-6' : ''}`}></div>
@@ -295,14 +349,22 @@ export default function AuditModal({
                   <span className="text-xs text-neutral-400 animate-pulse">Calculating exact review volume in temporal cohort...</span>
                 ) : (
                   <p className="text-xs text-neutral-200 mt-0.5">
-                    Auditing <strong className="text-indigo-400 font-mono">{estimatedReviews}</strong> reviews will use <strong className="text-amber-400 font-mono">{estimatedCost} credit{estimatedCost > 1 ? 's' : ''}</strong>. (1 credit / 100 reviews + {isComparison ? '1 comparison fee' : '0'}).
+                    {isFreePlan ? (
+                      <>Free plan audits up to <strong className="text-indigo-400 font-mono">100 reviews</strong> per product.</>
+                    ) : (
+                      <>Auditing <strong className="text-indigo-400 font-mono">{estimatedReviews}</strong> reviews will use <strong className="text-amber-400 font-mono">{estimatedCost} credit{estimatedCost > 1 ? 's' : ''}</strong>.</>
+                    )}
                   </p>
                 )}
               </div>
             </div>
             <div className="text-right shrink-0">
-              <span className="text-[10px] font-bold text-neutral-400 uppercase block">Remaining Balance</span>
-              <span className="text-sm font-black text-amber-400 font-mono">⚡ {availableCredits} Credits</span>
+              <span className="text-[10px] font-bold text-neutral-400 uppercase block">
+                {isFreePlan ? 'Product Links' : 'Remaining Balance'}
+              </span>
+              <span className="text-sm font-black text-amber-400 font-mono">
+                {isFreePlan ? `${currentProductCount}/${maxProductsAllowed} Used` : `⚡ ${availableCredits} Credits`}
+              </span>
             </div>
           </div>
         </div>
@@ -320,10 +382,10 @@ export default function AuditModal({
           <button
             type="button"
             onClick={handleFormSubmit}
-            disabled={isLoading || !inputText.trim()}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:opacity-50"
+            disabled={isLoading || !inputText.trim() || isProductLimitReached}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-[0_0_20px_rgba(79,70,229,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Processing Audit Pipeline...' : `⚡ Execute Smart AI Audit (${estimatedCost} Credit${estimatedCost > 1 ? 's' : ''})`}
+            {isLoading ? 'Processing Audit Pipeline...' : isProductLimitReached ? 'Product Limit Reached (3/3) — Upgrade' : `⚡ Execute Smart AI Audit`}
           </button>
         </div>
 
@@ -340,7 +402,7 @@ export default function AuditModal({
             <div>
               <h4 className="text-lg font-black text-white">Free Plan Review Limit Reached</h4>
               <p className="text-xs text-neutral-300 mt-1 leading-relaxed">
-                This temporal cohort contains <strong className="text-amber-400">{estimatedReviews} reviews</strong>. Free plan is limited to auditing 50 reviews per SKU.
+                This product contains <strong className="text-amber-400">{estimatedReviews} reviews</strong>. Free plan is limited to auditing up to the latest 100 reviews per SKU.
               </p>
             </div>
 
@@ -349,6 +411,7 @@ export default function AuditModal({
               <ul className="list-disc list-inside mt-1 space-y-0.5 text-neutral-300">
                 <li>Audit up to 10,000+ reviews per temporal cohort</li>
                 <li>Time-Machine YoY/MoM seasonal variance analysis</li>
+                <li>Unlimited product links in catalog</li>
                 <li>Bilingual English/Hindi factory QA mandate downloads</li>
               </ul>
             </div>
@@ -368,7 +431,7 @@ export default function AuditModal({
                 onClick={() => triggerAudit(true)}
                 className="w-full py-2 bg-white/5 hover:bg-white/10 text-neutral-300 border border-white/10 rounded-xl text-xs font-bold transition-colors"
               >
-                Analyze Latest 50 Free (1 Credit)
+                Analyze Latest 100 Free
               </button>
             </div>
           </div>

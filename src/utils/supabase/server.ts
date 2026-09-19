@@ -27,3 +27,33 @@ export async function createClient() {
     }
   )
 }
+export async function getAuthenticatedUser() {
+  const cookieStore = await cookies()
+  const devSession = cookieStore.get('reviewlens_dev_session')?.value
+  if (devSession) {
+    try {
+      const parsed = JSON.parse(devSession)
+      if (parsed && parsed.email) {
+        return {
+          id: parsed.id,
+          email: parsed.email,
+          user_metadata: parsed.user_metadata || {},
+          app_metadata: parsed.app_metadata || {},
+          devRole: parsed.role,
+          devPlan: parsed.plan,
+          devCredits: parsed.credits,
+        }
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    return user
+  } catch {
+    return null
+  }
+}

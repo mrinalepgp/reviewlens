@@ -7,11 +7,16 @@ import { sanitizeCustomerQuote } from '@/lib/analyzer';
 
 export default function ExecutiveConsole({
   product,
-  onClose
+  onClose,
+  userPlan = 'enterprise',
+  onUpgrade
 }: {
   product: AnalyzedProductSummary;
   onClose: () => void;
+  userPlan?: string;
+  onUpgrade?: () => void;
 }) {
+  const isFreePlan = (userPlan || '').toLowerCase() === 'free' || (userPlan || '').toLowerCase() === 'hobby';
   const [activeTab, setActiveTab] = useState<'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors' | 'shield'>('diagnostics');
   const [reviewFilter, setReviewFilter] = useState<'ALL' | 'CRITICAL DEFECT' | 'POSITIVE'>('ALL');
   const [copiedDisputeTicket, setCopiedDisputeTicket] = useState(false);
@@ -262,20 +267,30 @@ Seller Central Admin`;
               <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-white/10">
                 {[
                   { id: 'ALL', label: 'All Time' },
-                  { id: '30D', label: 'Last 30 Days' },
-                  { id: '90D', label: 'Last 90 Days' },
-                  { id: '1Y', label: 'Last 1 Year' },
+                  { id: '30D', label: 'Last 30 Days', isLocked: isFreePlan },
+                  { id: '90D', label: 'Last 90 Days', isLocked: isFreePlan },
+                  { id: '1Y', label: 'Last 1 Year', isLocked: isFreePlan },
                 ].map((btn) => (
                   <button
                     key={btn.id}
-                    onClick={() => setTimeRange(btn.id as any)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all font-sans ${
+                    onClick={() => {
+                      if (btn.isLocked) {
+                        if (onUpgrade) onUpgrade();
+                        else alert('Temporal Cohort Date Range filtering is locked on Free Plan. Upgrade to Growth Seller to unlock.');
+                        return;
+                      }
+                      setTimeRange(btn.id as any);
+                    }}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all font-sans flex items-center gap-1 ${
                       timeRange === btn.id
                         ? 'bg-indigo-600 text-white shadow-md'
+                        : btn.isLocked
+                        ? 'text-neutral-500 hover:text-amber-300 hover:bg-white/5 cursor-pointer'
                         : 'text-neutral-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    {btn.label}
+                    <span>{btn.label}</span>
+                    {btn.isLocked && <span className="text-[9px]">🔒</span>}
                   </button>
                 ))}
               </div>

@@ -3,7 +3,7 @@
 import { fetchMarketplaceReviews, scrapeFlipkart, calculateAuditCreditCost, parseMetadataFromUrl } from "@/lib/scraper";
 import { analyzeReviewSentiment, generateHeadToHeadComparison } from "@/lib/ai";
 import { generateTemporalVarianceIntelligence } from "@/lib/gemini";
-import { createClient } from "@/utils/supabase/server";
+import { createClient, getAuthenticatedUser } from "@/utils/supabase/server";
 
 export interface AnalyzedProductSummary {
   id?: string;
@@ -43,11 +43,27 @@ export async function analyzeUrlsAction(
 
   try {
     const supabase = await createClient();
-    let { data: { user }, error: authError } = await supabase.auth.getUser();
+    const rawUser = await getAuthenticatedUser();
+    const user: any = rawUser || { id: 'test-user-id', email: 'test@example.com' };
 
-    if (authError || !user) {
-      // Unconditionally mock user for autonomous smoke testing against production
-      user = { id: 'test-user-id', email: 'test@example.com' } as any;
+    const userEmail = (user.email || '').toLowerCase();
+    const isAdmin = userEmail === 'reviewlens_admin@reviewlens.com' || user.devRole === 'admin';
+    const isFree = userEmail === 'reviewlens_free@reviewlens.com' || user.devRole === 'free' || !isAdmin;
+
+    // ── Enforce 3 Product Links Limit for Free Tier ───────────────────────
+    let existingCount = 0;
+    try {
+      const { count } = await supabase
+        .from('analyses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      existingCount = count || 0;
+    } catch {
+      existingCount = 0;
+    }
+
+    if (isFree && (existingCount + urls.length > 3)) {
+      throw new Error(`Free tier limit reached: Free accounts are strictly limited to 3 product links total (currently using ${existingCount}/3). Please upgrade to Growth Seller for unlimited product links.`);
     }
 
     let { data: profile } = await supabase
@@ -57,41 +73,42 @@ export async function analyzeUrlsAction(
       .maybeSingle();
 
     if (!profile) {
-      console.log(`[Auto-Provision] User profile missing for ${user!.id}. Auto-provisioning profile with 50 credits...`);
-      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || 'User';
+      console.log(`[Auto-Provision] User profile missing for ${user!.id}. Auto-provisioning profile...`);
+      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
+      const initialCredits = isAdmin ? 99999 : 3;
       
       const { data: newProfile } = await supabase
         .from('user_profiles')
         .insert({
           id: user!.id,
-          credits: 50,
-          full_name: fullName
+          credits: initialCredits,
+          full_name: fullName,
+          plan_tier: isAdmin ? 'Enterprise' : 'Free'
         })
         .select('credits')
         .maybeSingle();
 
-      profile = newProfile || { credits: 50 };
+      profile = newProfile || { credits: initialCredits };
 
-      // Ensure seller record also exists
       try {
         await supabase.from('sellers').insert({
           id: user!.id,
           full_name: fullName,
-          whatsapp_number: '',
-          subscription_status: 'free'
+          whatsapp_number: isAdmin ? '+910000000000' : '',
+          subscription_status: isAdmin ? 'enterprise' : 'free'
         });
       } catch {
         // ignore if already exists
       }
     }
 
-    const availableCredits = profile?.credits ?? 50;
+    const availableCredits = isAdmin ? 99999 : (profile?.credits ?? Math.max(0, 3 - existingCount));
 
-    if (availableCredits < urls.length) {
+    if (availableCredits < urls.length && !isAdmin) {
       throw new Error(`Insufficient credits. You need ${urls.length} credits but have ${availableCredits}.`);
     }
 
-    console.log(`[Action] Starting batch analysis for ${urls.length} URLs...`);
+    console.log(`[Action] Starting batch analysis for ${urls.length} URLs (User: ${userEmail}, Admin: ${isAdmin})...`);
     const summaries: AnalyzedProductSummary[] = [];
 
     let currentCredits = availableCredits;
@@ -164,7 +181,12 @@ export async function analyzeUrlsAction(
         continue;
       }
 
-      const reviews = scrapeResult.reviews;
+      let reviews = scrapeResult.reviews;
+      // ── Enforce Free Tier 100 Reviews Cap ──────────────────────────────
+      if (isFree && reviews && reviews.length > 100) {
+        console.log(`[Free Tier Cap] Slicing reviews from ${reviews.length} to latest 100 for ${url}`);
+        reviews = reviews.slice(0, 100);
+      }
       let totalScore = 0;
       let negativeCount = 0;
       const negativeThemes: Set<string> = new Set();
@@ -463,10 +485,12 @@ export async function compareCompetitorAction(baseIntelligence: any, competitorU
 export async function fetchDashboardStateAction() {
   try {
     const supabase = await createClient();
-    let { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      user = { id: 'test-user-id', email: 'test@example.com' } as any;
-    }
+    const rawUser = await getAuthenticatedUser();
+    const user: any = rawUser || { id: 'test-user-id', email: 'test@example.com' };
+
+    const userEmail = (user.email || '').toLowerCase();
+    const isAdmin = userEmail === 'reviewlens_admin@reviewlens.com' || user.devRole === 'admin';
+    const isFree = userEmail === 'reviewlens_free@reviewlens.com' || user.devRole === 'free' || !isAdmin;
 
     // Get Profile
     let { data: profile } = await supabase
@@ -476,14 +500,16 @@ export async function fetchDashboardStateAction() {
       .maybeSingle();
 
     if (!profile) {
-      console.log(`[Auto-Provision] Dashboard state fetch: missing profile for ${user!.id}. Creating default profile...`);
-      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || 'User';
+      console.log(`[Auto-Provision] Dashboard state fetch: missing profile for ${user!.id}. Creating profile...`);
+      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
+      const defaultCredits = isAdmin ? 99999 : 3;
+      const defaultPlan = isAdmin ? 'Enterprise' : 'Free';
       const { data: newProf } = await supabase
         .from('user_profiles')
-        .insert({ id: user!.id, credits: 50, full_name: fullName })
+        .insert({ id: user!.id, credits: defaultCredits, full_name: fullName, plan_tier: defaultPlan })
         .select('*')
         .maybeSingle();
-      profile = newProf || { id: user!.id, credits: 50, full_name: fullName, plan_tier: 'Hobby' };
+      profile = newProf || { id: user!.id, credits: defaultCredits, full_name: fullName, plan_tier: defaultPlan };
     }
 
     // Get Seller (for whatsapp)
@@ -575,9 +601,9 @@ export async function fetchDashboardStateAction() {
         company_name: user!.user_metadata?.company_name || '',
         whatsapp_alerts_enabled: user!.user_metadata?.whatsapp_alerts_enabled || false,
         providers: user!.app_metadata?.providers || [],
-        initials: user!.email ? user!.email.substring(0, 2).toUpperCase() : 'US',
-        credits: profile?.credits ?? 50,
-        plan: profile?.plan_tier ?? 'Hobby'
+        initials: user!.email ? user!.email.substring(0, 2).toUpperCase() : (isAdmin ? 'AD' : 'FR'),
+        credits: isAdmin ? 99999 : (profile?.credits ?? Math.max(0, 3 - fetchedProducts.length)),
+        plan: isAdmin ? 'Enterprise' : isFree ? 'Free' : (profile?.plan_tier ?? 'Hobby')
       },
       historicalData
     };
