@@ -7,6 +7,18 @@ const MAX_REVIEW_CAP = 2000;
 type SampleMode = 'quick' | 'full';
 type QuickPreset = 5 | 15 | 30 | 50 | 100 | 'custom';
 
+/** Tiered credit calculation: Scrap.do pagination + Gemini token cost model */
+function calculateTieredCredits(reviewCount: number, isComparison: boolean): number {
+  let base = 1;
+  if (reviewCount <= 15) base = 1;
+  else if (reviewCount <= 50) base = 2;
+  else if (reviewCount <= 100) base = 3;
+  else if (reviewCount <= 500) base = 6;
+  else if (reviewCount <= 1000) base = 10;
+  else base = 18; // 1001–2000 hard cap
+  return base + (isComparison ? 2 : 0);
+}
+
 export interface AuditModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -68,18 +80,21 @@ export default function AuditModal({
   // Handle Preset Changes
   const handlePresetSelect = (preset: '30D' | '90D' | 'CUSTOM') => {
     setDatePreset(preset);
-    const today = new Date().toISOString().split('T')[0];
-    setEndDate(today);
 
     if (preset === '30D') {
+      const today = new Date();
+      setEndDate(today.toISOString().split('T')[0]);
       const d = new Date();
       d.setDate(d.getDate() - 30);
       setStartDate(d.toISOString().split('T')[0]);
     } else if (preset === '90D') {
+      const today = new Date();
+      setEndDate(today.toISOString().split('T')[0]);
       const d = new Date();
       d.setDate(d.getDate() - 90);
       setStartDate(d.toISOString().split('T')[0]);
     }
+    // CUSTOM: do NOT overwrite user-edited start/end dates
   };
 
   // Run Real-Time Pre-Flight Estimation when URL or Date Range changes
@@ -151,9 +166,7 @@ export default function AuditModal({
   const effectiveReviewCount = Math.min(selectedLimit, rawEstimatedReviews, MAX_REVIEW_CAP);
   const isHighVolume = rawEstimatedReviews > MAX_REVIEW_CAP;
   const estimatedReviews = effectiveReviewCount;
-  const estimatedCost = estimation?.creditCost
-    ? Math.max(1, Math.ceil(effectiveReviewCount / 100)) + (isComparison ? 1 : 0)
-    : (1 + (isComparison ? 1 : 0));
+  const estimatedCost = calculateTieredCredits(effectiveReviewCount, isComparison);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -321,21 +334,38 @@ export default function AuditModal({
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-neutral-400">Start Date</label>
+                  <label htmlFor="audit-start-date" className="text-[10px] font-semibold text-neutral-400">Start Date</label>
                   <input
+                    id="audit-start-date"
                     type="date"
                     value={startDate}
-                    onChange={(e) => { setStartDate(e.target.value); setDatePreset('CUSTOM'); }}
-                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                    max={endDate}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setStartDate(e.target.value);
+                        setDatePreset('CUSTOM');
+                      }
+                    }}
+                    style={{ colorScheme: 'dark' }}
+                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 cursor-pointer transition-all appearance-none"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-semibold text-neutral-400">End Date</label>
+                  <label htmlFor="audit-end-date" className="text-[10px] font-semibold text-neutral-400">End Date</label>
                   <input
+                    id="audit-end-date"
                     type="date"
                     value={endDate}
-                    onChange={(e) => { setEndDate(e.target.value); setDatePreset('CUSTOM'); }}
-                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500"
+                    min={startDate}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setEndDate(e.target.value);
+                        setDatePreset('CUSTOM');
+                      }
+                    }}
+                    style={{ colorScheme: 'dark' }}
+                    className="bg-black/60 border border-white/10 rounded-lg p-2 text-xs text-white font-mono outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 cursor-pointer transition-all appearance-none"
                   />
                 </div>
               </div>
@@ -425,7 +455,7 @@ export default function AuditModal({
                 ⏳ Time-Machine Seasonal Comparison
               </span>
               <span className="text-[11px] text-neutral-400">
-                Compare MoM / YoY seasonal variance &amp; emerging defect spikes (+1 Credit computation fee).
+                Compare MoM / YoY seasonal variance &amp; emerging defect spikes (+2 Credits computation fee).
               </span>
             </div>
             <button
