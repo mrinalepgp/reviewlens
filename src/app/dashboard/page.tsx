@@ -3,6 +3,7 @@
 export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
@@ -893,6 +894,19 @@ const MOCK_HISTORICAL_DATA: AnalyzedProductSummary[] = [
 ];
 
 export default function Dashboard() {
+  const router = useRouter();
+  const [toastNotification, setToastNotification] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info';
+  } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToastNotification({ message, type });
+    setTimeout(() => {
+      setToastNotification(null);
+    }, 6000);
+  };
+
   // ── Synchronous localStorage seed ────────────────────────────────────────
   // Runs in the useState initializer — before the first paint — so returning
   // users NEVER see a blank flash on reload. No useEffect needed for this.
@@ -1042,8 +1056,13 @@ export default function Dashboard() {
   const isFreeUser = (userState?.plan || '').toLowerCase() === 'free' || (userState?.plan || '').toLowerCase() === 'hobby';
 
   const handleAnalyze = async (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean; reviewLimit?: number }) => {
+    console.log('[AuditModal] Initiating audit with URL and limits:', { urls, options });
+
     if (isFreeUser && analyses.length + urls.length > 3) {
-      setError(`Free tier limit reached: Free accounts can analyze a maximum of 3 product links total (currently using ${analyses.length}/3). Please upgrade to Growth Seller for unlimited product links.`);
+      const limitMsg = `Free tier limit reached: Free accounts can analyze a maximum of 3 product links total (currently using ${analyses.length}/3). Please upgrade to Growth Seller for unlimited product links.`;
+      setError(limitMsg);
+      showToast(limitMsg, 'error');
+      setIsIngestionModalOpen(false);
       return;
     }
 
@@ -1093,6 +1112,17 @@ export default function Dashboard() {
         }
 
         setUserState((prev: any) => prev ? { ...prev, credits: Math.max(0, (prev.credits ?? 50) - updatedSummaries.length) } : prev);
+
+        // Explicit success feedback toast
+        showToast("Audit initiated successfully!", "success");
+
+        // Close modal smoothly
+        setIsIngestionModalOpen(false);
+
+        // Trigger router refresh so next-level server data syncs
+        try {
+          router.refresh();
+        } catch { /* ignore */ }
 
         // Background sync: replace local state with authoritative DB snapshot
         // (picks up DB ids + any server-side field enrichment) and re-saves cache.
@@ -1145,18 +1175,19 @@ export default function Dashboard() {
           if (res.success) setUserState(res.user);
         });
 
-        // Close modal smoothly after brief completion delay
-        setTimeout(() => setIsIngestionModalOpen(false), 400);
-
       } else {
-        setError("Pipeline Error: " + response.error);
+        const errorMsg = response.error || 'Failed to process product reviews.';
+        setError("Failed to process product reviews: " + errorMsg);
+        showToast("Failed to process product reviews: " + errorMsg, "error");
+        setIsIngestionModalOpen(false);
       }
     } catch (err: any) {
-      if (err.message === "TIMEOUT_90S" || err.message?.includes("504") || err.message?.includes("timeout")) {
-        setError("The request took too long. Please try a direct product page link or re-submit.");
-      } else {
-        setError("A fatal error occurred: " + (err.message || ''));
-      }
+      const errorMsg = (err.message === "TIMEOUT_90S" || err.message?.includes("504") || err.message?.includes("timeout"))
+        ? "The request took longer than expected (timed out after 90s). Please try a direct product page link or re-submit."
+        : (err.message || 'An unexpected error occurred during analysis.');
+      setError("Failed to process product reviews: " + errorMsg);
+      showToast("Failed to process product reviews: " + errorMsg, "error");
+      setIsIngestionModalOpen(false);
     } finally {
       clearInterval(stepInterval);
       setIsLoading(false);
@@ -1446,7 +1477,7 @@ export default function Dashboard() {
       <SmartIngestionModal
         isOpen={isIngestionModalOpen}
         onClose={() => setIsIngestionModalOpen(false)}
-        onAnalyze={(urls, options) => { handleAnalyze(urls, options); }}
+        onAnalyze={(urls, options) => handleAnalyze(urls, options)}
         isLoading={isLoading}
         loadingStep={activeStep}
         currentSkuIndex={currentSkuIndex}
@@ -1469,6 +1500,36 @@ export default function Dashboard() {
         onUpdate={(updates) => setUserState((prev: any) => ({ ...prev, ...updates }))}
         onAccountWiped={handleSignOut}
       />
+
+      {/* Explicit Global Notification Toast */}
+      {toastNotification && (
+        <div className="fixed top-5 right-5 z-[200] max-w-md w-[calc(100vw-2.5rem)] sm:w-auto animate-in slide-in-from-top-3 fade-in duration-200">
+          <div className={`flex items-start gap-3 p-4 rounded-2xl border shadow-2xl backdrop-blur-xl ${
+            toastNotification.type === 'success'
+              ? 'bg-emerald-950/95 border-emerald-500/40 text-emerald-100 shadow-[0_0_30px_rgba(16,185,129,0.2)]'
+              : toastNotification.type === 'error'
+              ? 'bg-rose-950/95 border-rose-500/40 text-rose-100 shadow-[0_0_30px_rgba(244,63,94,0.2)]'
+              : 'bg-indigo-950/95 border-indigo-500/40 text-indigo-100 shadow-[0_0_30px_rgba(99,102,241,0.2)]'
+          }`}>
+            <div className="text-xl shrink-0 mt-0.5">
+              {toastNotification.type === 'success' ? '✅' : toastNotification.type === 'error' ? '⚠️' : 'ℹ️'}
+            </div>
+            <div className="flex-1 text-xs leading-relaxed">
+              <div className="font-bold uppercase tracking-wider text-[11px] mb-0.5">
+                {toastNotification.type === 'success' ? 'Audit Initiated' : toastNotification.type === 'error' ? 'Audit Notification' : 'Notification'}
+              </div>
+              <p className="opacity-90">{toastNotification.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastNotification(null)}
+              className="text-white/60 hover:text-white text-sm shrink-0 p-1 hover:bg-white/10 rounded-lg transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

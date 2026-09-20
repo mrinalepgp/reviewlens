@@ -116,49 +116,23 @@ export async function analyzeUrlsAction(
     for (const url of urls) {
       let scrapeResult;
       
-      if (url.includes('flipkart.com')) {
-        try {
-          const customRes = await scrapeFlipkart(url);
-          const meta = parseMetadataFromUrl(url, 'flipkart');
-          
-          if (!customRes || !customRes.price || !customRes.reviews?.length) {
-            scrapeResult = {
-              success: false,
-              marketplace: 'flipkart' as any,
-              url,
-              reviews: [],
-              error: 'Failed to extract live product price or reviews from Flipkart.'
-            };
-          } else {
-            scrapeResult = {
-              success: true,
-              scrapedLive: true,
-              marketplace: 'flipkart' as any,
-              url: url,
-              reviews: customRes.reviews,
-              productTitle: customRes.title || meta.title,
-              price: customRes.price > 0 ? `₹${customRes.price}` : '',
-              brand: meta.brand || 'Seller Brand',
-              category: meta.category || 'General',
-            };
-          }
-        } catch (err: any) {
-          scrapeResult = {
-            success: false,
-            marketplace: 'flipkart' as any,
-            url,
-            reviews: [],
-            error: err?.message || 'Flipkart dynamic anti-block scraping failed.'
-          };
-        }
-      } else {
+      try {
         scrapeResult = await fetchMarketplaceReviews(url);
+      } catch (err: any) {
+        console.error(`[Action] fetchMarketplaceReviews exception for ${url}:`, err);
+        scrapeResult = {
+          success: false,
+          marketplace: 'unknown' as any,
+          url,
+          reviews: [],
+          error: err?.message || 'Scraping and review extraction failed.'
+        };
       }
 
       if (!scrapeResult.success) {
         console.error(`[Action] Scraping failed for ${url}: ${scrapeResult.error}`);
         // NEVER save "Analysis Failed: ..." as a product name in the database
-        throw new Error(`Unable to retrieve live listing data for ${url}. Please check the URL and try again.`);
+        throw new Error(scrapeResult.error || `Unable to retrieve live listing data for ${url}. Please check the URL and try again.`);
       }
 
       if (!scrapeResult.reviews || !scrapeResult.reviews.length) {

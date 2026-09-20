@@ -651,7 +651,7 @@ export async function fetchMarketplaceReviews(url: string): Promise<ScrapingResu
       if (proxyUrl) {
         try {
           console.log(`[Worker Pool] Executing Scrape.do API fetch (render=true) for page ${page}`);
-          const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(30000) });
+          const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(60000) });
           if (response.ok) {
             html = await response.text();
           } else {
@@ -1172,7 +1172,8 @@ export async function scrapeFlipkart(productUrl: string) {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-IN,en;q=0.9',
       },
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: AbortSignal.timeout(60000)
     });
     return await res.text();
   };
