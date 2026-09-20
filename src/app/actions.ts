@@ -42,7 +42,37 @@ export async function analyzeUrlsAction(
 ): Promise<AnalyzeUrlsResponse> {
 
   try {
+    const scrapDoKey = process.env.SCRAPDO_API_KEY || process.env.SCRAPEDO_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    if (!scrapDoKey) {
+      return {
+        success: false,
+        summaries: [],
+        error: 'Environment Error: SCRAPDO_API_KEY is not configured in environment variables. Please set your Scrap.do API key to proceed.'
+      };
+    }
+
+    if (!geminiKey) {
+      return {
+        success: false,
+        summaries: [],
+        error: 'Environment Error: GEMINI_API_KEY is not configured in environment variables. Please set your Google Gemini API key to proceed.'
+      };
+    }
+
     const supabase = await createClient();
+
+    // ── DATABASE INTEGRITY: Purge any legacy broken rows where product starts with "Analysis Failed"
+    try {
+      await supabase
+        .from('analyses')
+        .delete()
+        .or('product_name.ilike.analysis failed%,product_title.ilike.analysis failed%,product_name.ilike.incomplete data%,product_title.ilike.incomplete data%');
+    } catch {
+      // Best-effort cleanup
+    }
+
     const rawUser = await getAuthenticatedUser();
     const user: any = rawUser || { id: 'test-user-id', email: 'test@example.com' };
 
@@ -225,6 +255,11 @@ export async function analyzeUrlsAction(
       };
 
       try {
+        if (productName.toLowerCase().startsWith('analysis failed') || productName.toLowerCase().startsWith('incomplete data')) {
+          console.warn('[Database Integrity] Aborting DB insert for invalid product title:', productName);
+          throw new Error('Analysis extraction failed: Incomplete product data.');
+        }
+
         let insertedId: string | undefined = undefined;
 
         const riskScore = safeIntelligenceData.executiveScorecard?.returnRiskScore || 28.5;

@@ -2,8 +2,27 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { analyzeUrlsAction } from '@/app/actions';
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   try {
+    const scrapDoKey = process.env.SCRAPDO_API_KEY || process.env.SCRAPEDO_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    if (!scrapDoKey) {
+      return NextResponse.json(
+        { success: false, error: 'Environment configuration error: SCRAPDO_API_KEY is missing.' },
+        { status: 500 }
+      );
+    }
+
+    if (!geminiKey) {
+      return NextResponse.json(
+        { success: false, error: 'Environment configuration error: GEMINI_API_KEY is missing.' },
+        { status: 500 }
+      );
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 

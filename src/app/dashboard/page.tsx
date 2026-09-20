@@ -918,7 +918,16 @@ export default function Dashboard() {
       const raw = localStorage.getItem('reviewlens_persistent_catalog') || localStorage.getItem('reviewlens_catalog');
       if (raw) {
         const parsed = JSON.parse(raw) as AnalyzedProductSummary[];
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const clean = parsed.filter(p => {
+            const title = (p.title || '').toLowerCase();
+            return !title.startsWith('analysis failed') && !title.startsWith('incomplete data');
+          });
+          if (clean.length !== parsed.length) {
+            localStorage.setItem('reviewlens_persistent_catalog', JSON.stringify(clean));
+          }
+          return clean;
+        }
       }
     } catch { /* corrupt JSON — ignore */ }
     return [];
