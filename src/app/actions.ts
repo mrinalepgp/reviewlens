@@ -38,7 +38,7 @@ export interface ReviewAnalysisRow {
  */
 export async function analyzeUrlsAction(
   urls: string[],
-  options?: { startDate?: string; endDate?: string; isComparison?: boolean }
+  options?: { startDate?: string; endDate?: string; isComparison?: boolean; reviewLimit?: number }
 ): Promise<AnalyzeUrlsResponse> {
 
   try {
@@ -186,6 +186,14 @@ export async function analyzeUrlsAction(
       if (isFree && reviews && reviews.length > 100) {
         console.log(`[Free Tier Cap] Slicing reviews from ${reviews.length} to latest 100 for ${url}`);
         reviews = reviews.slice(0, 100);
+      }
+
+      // ── Enforce Review Limit from UI (max 2000) ─────────────────────────
+      const MAX_REVIEW_CAP = 2000;
+      const reviewLimit = Math.min(options?.reviewLimit || MAX_REVIEW_CAP, MAX_REVIEW_CAP);
+      if (reviews && reviews.length > reviewLimit) {
+        console.log(`[Volume Cap] Slicing reviews from ${reviews.length} to ${reviewLimit} for ${url}`);
+        reviews = reviews.slice(0, reviewLimit);
       }
       let totalScore = 0;
       let negativeCount = 0;

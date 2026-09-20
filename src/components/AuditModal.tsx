@@ -2,10 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 
+const MAX_REVIEW_CAP = 2000;
+
+type SampleMode = 'quick' | 'full';
+type QuickPreset = 5 | 15 | 30 | 50 | 100 | 'custom';
+
 export interface AuditModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAnalyze: (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean }) => void;
+  onAnalyze: (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean; reviewLimit?: number }) => void;
   isLoading: boolean;
   loadingStep?: number;
   currentSkuIndex?: number;
@@ -42,6 +47,11 @@ export default function AuditModal({
   
   // Time-Machine Comparison Toggle
   const [isComparison, setIsComparison] = useState<boolean>(false);
+
+  // Review Volume Controls
+  const [sampleMode, setSampleMode] = useState<SampleMode>('quick');
+  const [quickPreset, setQuickPreset] = useState<QuickPreset>(50);
+  const [customCount, setCustomCount] = useState<number>(200);
 
   // Pre-Flight Estimation State
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
@@ -128,8 +138,22 @@ export default function AuditModal({
 
   const isFreePlan = (userPlan || 'enterprise').toLowerCase() === 'hobby' || (userPlan || '').toLowerCase() === 'free';
   const isProductLimitReached = isFreePlan && currentProductCount >= maxProductsAllowed;
-  const estimatedReviews = estimation?.reviewVolume || 120;
-  const estimatedCost = estimation?.creditCost || (1 + (isComparison ? 1 : 0));
+  const rawEstimatedReviews = estimation?.reviewVolume || 120;
+
+  // Compute the effective review limit based on sampling controls
+  const selectedLimit = (() => {
+    if (isFreePlan) return 100; // Free tier always capped at 100
+    if (sampleMode === 'full') return Math.min(rawEstimatedReviews, MAX_REVIEW_CAP);
+    if (quickPreset === 'custom') return Math.min(Math.max(1, customCount), MAX_REVIEW_CAP);
+    return quickPreset;
+  })();
+
+  const effectiveReviewCount = Math.min(selectedLimit, rawEstimatedReviews, MAX_REVIEW_CAP);
+  const isHighVolume = rawEstimatedReviews > MAX_REVIEW_CAP;
+  const estimatedReviews = effectiveReviewCount;
+  const estimatedCost = estimation?.creditCost
+    ? Math.max(1, Math.ceil(effectiveReviewCount / 100)) + (isComparison ? 1 : 0)
+    : (1 + (isComparison ? 1 : 0));
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,7 +186,8 @@ export default function AuditModal({
     onAnalyze(urls, {
       startDate: isFreePlan ? undefined : startDate,
       endDate: isFreePlan ? undefined : endDate,
-      isComparison: isFreePlan ? false : isComparison
+      isComparison: isFreePlan ? false : isComparison,
+      reviewLimit: isFreePlan ? 100 : Math.min(selectedLimit, MAX_REVIEW_CAP)
     });
   };
 
@@ -317,6 +342,82 @@ export default function AuditModal({
             )}
           </div>
 
+          {/* ───── Review Sampling & Volume Limit ───── */}
+          {!isFreePlan && (
+            <div className="border rounded-xl p-4 flex flex-col gap-3 bg-white/[0.02] border-white/10 transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  🎚️ Review Sampling & Volume Limit
+                </span>
+                <div className="flex gap-1">
+                  {([['quick', 'Quick Samples'], ['full', 'Full Cohort']] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setSampleMode(mode as SampleMode)}
+                      className={`px-2.5 py-1 rounded text-[10px] font-bold border transition-all ${
+                        sampleMode === mode
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-black/40 text-neutral-400 border-white/5 hover:border-white/20'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {sampleMode === 'quick' ? (
+                <div className="flex flex-wrap gap-2">
+                  {([5, 15, 30, 50, 100, 'custom'] as const).map((preset) => (
+                    <button
+                      key={String(preset)}
+                      type="button"
+                      onClick={() => setQuickPreset(preset)}
+                      className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        quickPreset === preset
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                          : 'bg-black/40 text-neutral-400 border-white/5 hover:border-white/20 hover:text-neutral-200'
+                      }`}
+                    >
+                      {preset === 'custom' ? '✏️ Custom' : `Latest ${preset}`}
+                    </button>
+                  ))}
+                  {quickPreset === 'custom' && (
+                    <div className="flex items-center gap-2 mt-1 w-full">
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_REVIEW_CAP}
+                        value={customCount}
+                        onChange={(e) => setCustomCount(Math.min(MAX_REVIEW_CAP, Math.max(1, parseInt(e.target.value) || 1)))}
+                        className="w-28 bg-black/60 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-mono outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        placeholder="e.g. 250"
+                      />
+                      <span className="text-[10px] text-neutral-500">Max {MAX_REVIEW_CAP.toLocaleString()} reviews</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-xs text-emerald-300">
+                    <strong>All Cohort Reviews</strong> — Audits the entire review population in your selected date range, up to a maximum of <span className="font-mono font-bold text-emerald-200">{MAX_REVIEW_CAP.toLocaleString()}</span> reviews per execution.
+                  </div>
+                </div>
+              )}
+
+              {/* High Volume Alert Banner */}
+              {isHighVolume && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex items-start gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <span className="text-base leading-none mt-0.5">⚠️</span>
+                  <p className="text-[11px] text-amber-300 leading-snug">
+                    <strong>High Review Volume:</strong> More than {MAX_REVIEW_CAP.toLocaleString()} reviews found in this period. ReviewLens will prioritize and audit the latest <span className="font-mono font-bold text-amber-200">{MAX_REVIEW_CAP.toLocaleString()}</span> reviews for this execution.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Time-Machine Comparison Toggle */}
           <div className="bg-gradient-to-r from-purple-950/20 via-neutral-900 to-black border border-purple-500/20 rounded-xl p-4 flex items-center justify-between">
             <div className="flex flex-col gap-0.5">
@@ -352,7 +453,7 @@ export default function AuditModal({
                     {isFreePlan ? (
                       <>Free plan audits up to <strong className="text-indigo-400 font-mono">100 reviews</strong> per product.</>
                     ) : (
-                      <>Auditing <strong className="text-indigo-400 font-mono">{estimatedReviews}</strong> reviews will use <strong className="text-amber-400 font-mono">{estimatedCost} credit{estimatedCost > 1 ? 's' : ''}</strong>.</>
+                      <>Auditing <strong className="text-indigo-400 font-mono">{effectiveReviewCount.toLocaleString()}</strong>{rawEstimatedReviews > effectiveReviewCount ? <span className="text-neutral-500"> of {rawEstimatedReviews.toLocaleString()}</span> : ''} reviews will use <strong className="text-amber-400 font-mono">{estimatedCost} credit{estimatedCost > 1 ? 's' : ''}</strong>.</>
                     )}
                   </p>
                 )}

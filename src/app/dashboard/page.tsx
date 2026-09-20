@@ -1041,7 +1041,7 @@ export default function Dashboard() {
 
   const isFreeUser = (userState?.plan || '').toLowerCase() === 'free' || (userState?.plan || '').toLowerCase() === 'hobby';
 
-  const handleAnalyze = async (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean }) => {
+  const handleAnalyze = async (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean; reviewLimit?: number }) => {
     if (isFreeUser && analyses.length + urls.length > 3) {
       setError(`Free tier limit reached: Free accounts can analyze a maximum of 3 product links total (currently using ${analyses.length}/3). Please upgrade to Growth Seller for unlimited product links.`);
       return;
