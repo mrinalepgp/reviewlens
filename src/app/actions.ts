@@ -157,28 +157,14 @@ export async function analyzeUrlsAction(
 
       if (!scrapeResult.success) {
         console.error(`[Action] Scraping failed for ${url}: ${scrapeResult.error}`);
-        summaries.push({
-          url,
-          platform: scrapeResult.marketplace || 'unknown',
-          title: `Analysis Failed: ${scrapeResult.error}`,
-          averageScore: 0,
-          riskAssessment: 'safe',
-          negativeThemes: ['Pipeline Error'],
-        });
-        continue;
+        // NEVER save "Analysis Failed: ..." as a product name in the database
+        throw new Error(`Unable to retrieve live listing data for ${url}. Please check the URL and try again.`);
       }
 
       if (!scrapeResult.reviews || !scrapeResult.reviews.length) {
         console.warn(`[Action] No reviews collected for URL: ${url}`);
-        summaries.push({
-          url,
-          platform: scrapeResult.marketplace || 'unknown',
-          title: `Incomplete Data: No Reviews Found`,
-          averageScore: 0,
-          riskAssessment: 'safe',
-          negativeThemes: ['Insufficient Data'],
-        });
-        continue;
+        // NEVER save error placeholder titles in the database
+        throw new Error(`No reviews could be extracted for ${url}. The listing may have no reviews or the page structure has changed.`);
       }
 
       let reviews = scrapeResult.reviews;
@@ -542,6 +528,24 @@ export async function fetchDashboardStateAction() {
       if (!analysesError && analysesData && analysesData.length > 0) {
         fetchedProducts = analysesData;
         console.log(`[Dashboard] Loaded ${analysesData.length} analyses records from DB for user ${user!.id}`);
+
+        // Background cleanup: remove broken entries with error-string product names
+        const brokenIds = analysesData
+          .filter((a: any) => {
+            const name = (a.product_name || a.product_title || '').toLowerCase();
+            return name.startsWith('analysis failed') || name.startsWith('incomplete data');
+          })
+          .map((a: any) => a.id)
+          .filter(Boolean);
+        if (brokenIds.length > 0) {
+          console.log(`[DB Cleanup] Removing ${brokenIds.length} broken 'Analysis Failed' entries...`);
+          fetchedProducts = analysesData.filter((a: any) => !brokenIds.includes(a.id));
+          // Fire-and-forget DB cleanup
+          void supabase.from('analyses').delete().in('id', brokenIds).then(({ error }) => {
+            if (error) console.error('[DB Cleanup] Delete error:', error.message);
+            else console.log(`[DB Cleanup] Successfully purged ${brokenIds.length} broken entries.`);
+          });
+        }
       }
     } catch (e) {
       console.error('[Dashboard] Exception fetching analyses:', e);
