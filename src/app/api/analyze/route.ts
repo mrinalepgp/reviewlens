@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     console.log(`[API /api/analyze] Authenticated request. userId=${userId} email=${user.email}`);
 
     const body = await request.json();
-    const { urls } = body;
+    const { urls, options } = body;
 
     if (!urls || !Array.isArray(urls) || urls.length === 0) {
       return NextResponse.json(
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await analyzeUrlsAction(urls);
+    const result = await analyzeUrlsAction(urls, options);
     if (!result.success) {
       return NextResponse.json(result, { status: 500 });
     }

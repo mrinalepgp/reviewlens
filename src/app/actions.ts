@@ -15,6 +15,8 @@ export interface AnalyzedProductSummary {
   riskAssessment: 'safe' | 'warning' | 'critical';
   negativeThemes: string[];
   intelligence?: any;
+  raw_reviews?: any[];
+  reviewsCount?: number;
 }
 
 export interface AnalyzeUrlsResponse {
@@ -147,7 +149,7 @@ export async function analyzeUrlsAction(
       let scrapeResult;
       
       try {
-        scrapeResult = await fetchMarketplaceReviews(url);
+        scrapeResult = await fetchMarketplaceReviews(url, options);
       } catch (err: any) {
         console.error(`[Action] fetchMarketplaceReviews exception for ${url}:`, err);
         scrapeResult = {
@@ -404,6 +406,8 @@ export async function analyzeUrlsAction(
         riskAssessment,
         negativeThemes: Array.from(negativeThemes),
         intelligence: safeIntelligenceData,
+        raw_reviews: reviews,
+        reviewsCount: reviews.length
       });
     }
 
@@ -609,7 +613,9 @@ export async function fetchDashboardStateAction() {
         averageScore: p.average_rating || p.averageScore || 4.0,
         riskAssessment: p.risk_status || p.riskAssessment || 'safe',
         negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
-        intelligence: intel
+        intelligence: intel,
+        raw_reviews: p.raw_reviews || intel.raw_reviews || intel.reviews || [],
+        reviewsCount: (p.raw_reviews || intel.raw_reviews || intel.reviews || []).length
       };
     });
 

@@ -504,7 +504,13 @@ export default function AuditModal({
             <div className="flex items-center gap-3">
               <div className="text-xl">💳</div>
               <div>
-                <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">Pre-Flight Audit Estimation</span>
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">Pre-Flight Audit Estimation</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shrink-0 font-sans">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Verified Sample: {effectiveReviewCount.toLocaleString()} Live Reviews Audited
+                  </span>
+                </div>
                 {isEstimating ? (
                   <span className="text-xs text-neutral-400 animate-pulse">Calculating exact review volume in temporal cohort...</span>
                 ) : (
@@ -551,7 +557,7 @@ export default function AuditModal({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span>Auditing Reviews... Please wait</span>
+                <span>Auditing {effectiveReviewCount.toLocaleString()} Live Reviews... Please wait</span>
               </>
             ) : isProductLimitReached ? (
               'Product Limit Reached (3/3) — Upgrade'

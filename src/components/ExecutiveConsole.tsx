@@ -124,7 +124,7 @@ Seller Central Admin`;
   };
   
   const rawReviewsList = (product as any).raw_reviews || intelligence.raw_reviews || intelligence.reviews || [];
-  const auditedReviewsCount = rawReviewsList.length;
+  const auditedReviewsCount = (product as any).reviewsCount || rawReviewsList.length;
 
   // Cohort Analytics Filtering
   const cohortFilteredReviews = rawReviewsList.filter((r: any) => {
@@ -239,7 +239,7 @@ Seller Central Admin`;
               <span className="text-xs text-neutral-400 uppercase font-sans tracking-wider font-bold shrink-0">{product.platform}</span>
               <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shrink-0 font-sans">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Verified Sample: {auditedReviewsCount > 0 ? `${auditedReviewsCount} Live Reviews Audited` : '15 Reviews Audited'}
+                Verified Sample: {auditedReviewsCount > 0 ? `${auditedReviewsCount} Live Reviews Audited` : 'Live Reviews Audited'}
               </span>
             </div>
             <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight font-sans">{product.title}</h3>
