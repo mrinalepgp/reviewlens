@@ -716,14 +716,15 @@ export async function fetchWithBrightData(targetUrl: string): Promise<string> {
       body: JSON.stringify({
         zone: zone,
         url: targetUrl,
-        format: 'raw'
+        format: 'raw',
+        country: 'in'
       })
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[BrightData Error] Status ${res.status}:`, errText);
-      throw new Error(`BrightData request failed with status ${res.status}`);
+      console.error(`[BrightData Error] Status ${res.status}:`, errText.slice(0, 300));
+      throw new Error(`BrightData HTTP ${res.status}: ${errText.slice(0, 200)}`);
     }
 
     const html = await res.text();
@@ -825,22 +826,20 @@ async function extractReviewsFromFlipkartPageHtml(
   }
 
   reviewCards.each((idx, el) => {
+    const ratingText = $rev(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz').first().text().trim();
     const titleText = $rev(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
-    
-    const rawText = $rev(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
-      || $rev(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
+    let rawText = $rev(el).find('div.t-ZTKy > div > div, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().trim();
+    rawText = rawText.replace(/READ MORE/gi, '').trim() || titleText;
       
-    const ratingText = $rev(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
-    const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 4;
-    
-    const authorText = $rev(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ, p._2V5EHH, span._2NsDsF, p[class*="author"]').first().text().trim();
-    const dateText = $rev(el).find('p._2mcML^, p._331-kn, p._2sc7ZR + p').last().text().trim();
+    const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 5;
+    const authorText = $rev(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ').first().text().trim();
+    const dateText = $rev(el).find('p._2mcML^, p._331-kn, p._2sc7ZR ~ p, span._2V5rqZ ~ p').last().text().trim();
 
-    if (rawText.length > 15 && !rawText.includes('Flipkart Customer') && !rawText.includes('Certified Buyer')) {
+    if (rawText || titleText) {
       pageCandidates.push({
         text: rawText,
         rating: Math.min(5, Math.max(1, parsedRating)),
-        author: authorText || 'Verified Buyer',
+        author: authorText || 'Flipkart Customer',
         date: dateText || ''
       });
     }
@@ -997,20 +996,22 @@ export async function fetchMarketplaceReviews(
           }
         }
         prodReviewCards.each((idx, el) => {
-          const rawText = $prod(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
-            || $prod(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
-          const ratingText = $prod(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
-          const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 4;
-          const authorText = $prod(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ, p._2V5EHH, span._2NsDsF, p[class*="author"]').first().text().trim();
-          const dateText = $prod(el).find('p._2mcML^, p._331-kn, p._2sc7ZR + p').last().text().trim();
-          
-          if (rawText.length > 15 && !rawText.includes('Flipkart Customer') && !rawText.includes('Certified Buyer')) {
+          const ratingText = $prod(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz').first().text().trim();
+          const titleText = $prod(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
+          let rawText = $prod(el).find('div.t-ZTKy > div > div, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().trim();
+          rawText = rawText.replace(/READ MORE/gi, '').trim() || titleText;
+            
+          const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 5;
+          const authorText = $prod(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ').first().text().trim();
+          const dateText = $prod(el).find('p._2mcML^, p._331-kn, p._2sc7ZR ~ p, span._2V5rqZ ~ p').last().text().trim();
+
+          if (rawText || titleText) {
             allExtractedReviews.push({
               id: `fk_dom_${idx}`,
               marketplace: 'flipkart',
               rating: Math.min(5, Math.max(1, parsedRating)),
               content: rawText,
-              author: authorText || 'Verified Buyer',
+              author: authorText || 'Flipkart Customer',
               date: dateText || new Date(Date.now() - idx * 43200000).toISOString()
             });
           }
@@ -1054,8 +1055,8 @@ export async function fetchMarketplaceReviews(
         const perPageTimeout = Math.min(12000, remainingMs);
 
         const batchPromises = batchPages.map(async (p) => {
-          const pageUrl = (slug && itmId && pid) 
-            ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${encodeURIComponent(pid)}&page=${p}`
+          const pageUrl = (itmId && pid) 
+            ? `https://www.flipkart.com/product-reviews/${itmId}?pid=${encodeURIComponent(pid)}&page=${p}`
             : `${url.includes('?') ? url : url + '?dummy=1'}&page=${p}`;
           const pageStart = Date.now();
           let revHtml = '';
@@ -1066,7 +1067,11 @@ export async function fetchMarketplaceReviews(
           }
           const pageLatency = Date.now() - pageStart;
           console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms`);
-          if (!revHtml) return { page: p, title: undefined, price: undefined, reviews: [] };
+          
+          if (!revHtml || revHtml.length < 1000) {
+            console.warn(`[Scraper] Page ${p} returned empty/suspicious HTML (< 1000 bytes)`);
+            return { page: p, title: undefined, price: undefined, reviews: [] };
+          }
           const allowGemini = (p === 1 && allExtractedReviews.length === 0);
           const extracted = await extractReviewsFromFlipkartPageHtml(revHtml, p, allowGemini);
           return { page: p, ...extracted };
