@@ -708,15 +708,11 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
  * - Body: { zone, url, format: "raw" }
  * - Full diagnostic output: console.log('[Scraper] Status:', res.status, 'Content-Length:', html.length);
  */
-export async function fetchWithBrightData(
-  targetUrl: string,
-  timeoutMs: number = 60000,
-  _render: boolean = true
-): Promise<{ ok: boolean; status: number; html: string }> {
+export async function fetchWithBrightData(targetUrl: string): Promise<string> {
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   if (!apiKey) {
     console.error('[Scraper] BRIGHTDATA_API_KEY is not configured in environment.');
-    return { ok: false, status: 500, html: '' };
+    throw new Error('BRIGHTDATA_API_KEY is not configured');
   }
 
   const zone = process.env.BRIGHTDATA_ZONE || 'ecommerce_audit';
@@ -725,29 +721,29 @@ export async function fetchWithBrightData(
     console.log(`[Scraper] Requesting Bright Data Web Unlocker (zone=${zone}) for: ${targetUrl}`);
     const res = await fetch('https://api.brightdata.com/request', {
       method: 'POST',
-      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        zone,
+        zone: zone,
         url: targetUrl,
         format: 'raw'
       })
     });
 
-    const html = await res.text();
-    console.log('[Scraper] Status:', res.status, 'Content-Length:', html.length);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[BrightData Error] Status ${res.status}:`, errText);
+      throw new Error(`BrightData request failed with status ${res.status}`);
+    }
 
-    return {
-      ok: res.ok,
-      status: res.status,
-      html
-    };
+    const html = await res.text();
+    console.log(`[BrightData Success] Fetched ${html.length} bytes for ${targetUrl}`);
+    return html;
   } catch (err: any) {
     console.error(`[Scraper] Bright Data exception for ${targetUrl}:`, err.message);
-    return { ok: false, status: 504, html: '' };
+    throw err;
   }
 }
 
@@ -829,13 +825,28 @@ async function extractReviewsFromFlipkartPageHtml(
 
   // Level 2: DOM Selectors for Flipkart dedicated reviews page
   const $rev = cheerio.load(revHtml);
-  $rev('div.cPHDOP, div._16PBlm, div._2wzgFH, div.ZmyHeo, div.ZmyHev, div.col.EPCmJX, div._27M-vq, div[class*="review"]').each((idx, el) => {
-    const rawText = $rev(el).find('div.ZmyHeo, div.ZmyHev, div._2t8De8, div[class*="content"], div._1mXcCf').first().text().replace(/READ MORE/gi, '').trim()
+  
+  let reviewCards = $rev('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, [data-review-id]');
+  
+  // Content Fallback Safeguard (heuristic)
+  if (reviewCards.length === 0) {
+    const stars = $rev('div.XQDdHH, div._3LWZlK');
+    if (stars.length > 0) {
+      reviewCards = stars.closest('div').parent() as any;
+    }
+  }
+
+  reviewCards.each((idx, el) => {
+    const titleText = $rev(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
+    
+    const rawText = $rev(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy > div > div, div._2t8WExecution, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
       || $rev(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
-    const ratingText = $rev(el).find('div.XQDdHH, div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
-    const authorText = $rev(el).find('p._2sc7ZR, p._2V5EHH, span._2NsDsF, p[class*="author"]').first().text().trim();
-    const dateText = $rev(el).find('p._2mcML^, p._331-kn, p._2sc7ZR + p').last().text().trim();
+      
+    const ratingText = $rev(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
     const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 4;
+    
+    const authorText = $rev(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ, p._2V5EHH, span._2NsDsF, p[class*="author"]').first().text().trim();
+    const dateText = $rev(el).find('p._2mcML^, p._331-kn, p._2sc7ZR + p').last().text().trim();
 
     if (rawText.length > 15 && !rawText.includes('Flipkart Customer') && !rawText.includes('Certified Buyer')) {
       pageCandidates.push({
@@ -915,14 +926,20 @@ export async function fetchMarketplaceReviews(
     let scrapedTitle = '';
     let scrapedPrice = '';
     const allExtractedReviews: ReviewPayload[] = [];
+    let debugHtmlSnapshot = '';
 
     if (marketplace === 'flipkart') {
       const { slug, itmId, pid, canonicalProductUrl, dedicatedReviewsUrl } = normalizeFlipkartUrl(url);
 
       // ── Step 1: Fetch Canonical Product Page for Metadata ────────────────
-      console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
-      const prodRes = await fetchWithBrightData(canonicalProductUrl, 15000, true);
-      const prodHtml = prodRes.html;
+      let prodHtml = '';
+      try {
+        console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
+        prodHtml = await fetchWithBrightData(canonicalProductUrl);
+        debugHtmlSnapshot = prodHtml;
+      } catch (e: any) {
+        console.warn("[Scraper] Canonical fetch failed", e.message);
+      }
 
       if (prodHtml) {
         // Level 1A: __NEXT_DATA__
@@ -984,18 +1001,29 @@ export async function fetchMarketplaceReviews(
         }
 
         // Check for reviews in product page DOM
-        $prod('div._16PBlm, div._2wzgFH, div.ZmyHev, div.col.EPCmJX, div._27M-vq, div[class*="review"]').each((idx, el) => {
-          const text = $prod(el).text().replace(/\s+/g, ' ').trim();
-          const ratingText = $prod(el).find('div._3LWZlK, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').text().trim();
+        let prodReviewCards = $prod('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, [data-review-id]');
+        if (prodReviewCards.length === 0) {
+          const stars = $prod('div.XQDdHH, div._3LWZlK');
+          if (stars.length > 0) {
+            prodReviewCards = stars.closest('div').parent() as any;
+          }
+        }
+        prodReviewCards.each((idx, el) => {
+          const rawText = $prod(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy > div > div, div._2t8WExecution, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
+            || $prod(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
+          const ratingText = $prod(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
           const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 4;
-          if (text.length > 15 && !text.includes('Flipkart Customer') && !text.includes('Certified Buyer')) {
+          const authorText = $prod(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ, p._2V5EHH, span._2NsDsF, p[class*="author"]').first().text().trim();
+          const dateText = $prod(el).find('p._2mcML^, p._331-kn, p._2sc7ZR + p').last().text().trim();
+          
+          if (rawText.length > 15 && !rawText.includes('Flipkart Customer') && !rawText.includes('Certified Buyer')) {
             allExtractedReviews.push({
               id: `fk_dom_${idx}`,
               marketplace: 'flipkart',
               rating: Math.min(5, Math.max(1, parsedRating)),
-              content: text,
-              author: 'Verified Buyer',
-              date: new Date(Date.now() - idx * 43200000).toISOString()
+              content: rawText,
+              author: authorText || 'Verified Buyer',
+              date: dateText || new Date(Date.now() - idx * 43200000).toISOString()
             });
           }
         });
@@ -1040,13 +1068,17 @@ export async function fetchMarketplaceReviews(
         const batchPromises = batchPages.map(async (p) => {
           const pageUrl = `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=${p}` : `?page=${p}`}`;
           const pageStart = Date.now();
-          // Fast review fetch: render=false
-          const revRes = await fetchWithBrightData(pageUrl, perPageTimeout, false);
+          let revHtml = '';
+          try {
+             revHtml = await fetchWithBrightData(pageUrl);
+          } catch(e: any) {
+             console.warn("[Scraper] Page fetch failed", e.message);
+          }
           const pageLatency = Date.now() - pageStart;
-          console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms (status: ${revRes.status})`);
-          if (!revRes.html) return { page: p, title: undefined, price: undefined, reviews: [] };
+          console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms`);
+          if (!revHtml) return { page: p, title: undefined, price: undefined, reviews: [] };
           const allowGemini = (p === 1 && allExtractedReviews.length === 0);
-          const extracted = await extractReviewsFromFlipkartPageHtml(revRes.html, p, allowGemini);
+          const extracted = await extractReviewsFromFlipkartPageHtml(revHtml, p, allowGemini);
           return { page: p, ...extracted };
         });
 
@@ -1131,9 +1163,14 @@ export async function fetchMarketplaceReviews(
         }
       }
     } else if (marketplace === 'meesho') {
-      console.log('[Scraper] Fetching Meesho product page:', sanitized);
-      const mRes = await fetchWithBrightData(sanitized, 60000);
-      const mHtml = mRes.html;
+      let mHtml = '';
+      try {
+        console.log('[Scraper] Fetching Meesho product page:', sanitized);
+        mHtml = await fetchWithBrightData(sanitized);
+        debugHtmlSnapshot = mHtml;
+      } catch (e: any) {
+        console.warn("[Scraper] Meesho fetch failed", e.message);
+      }
 
       if (mHtml) {
         // Level 1A: __NEXT_DATA__
@@ -1234,9 +1271,15 @@ export async function fetchMarketplaceReviews(
       }
     } else {
       // Other platforms fallback
-      const resp = await fetchWithBrightData(sanitized, 60000);
-      if (resp.html) {
-        const geminiResult = await extractViaGeminiSelfHealing(resp.html, marketplace);
+      let respHtml = '';
+      try {
+        respHtml = await fetchWithBrightData(sanitized);
+        debugHtmlSnapshot = respHtml;
+      } catch (e: any) {
+        console.warn("[Scraper] Fallback fetch failed", e.message);
+      }
+      if (respHtml) {
+        const geminiResult = await extractViaGeminiSelfHealing(respHtml, marketplace);
         if (geminiResult) {
           if (geminiResult.title) scrapedTitle = geminiResult.title;
           if (geminiResult.price) scrapedPrice = `₹${geminiResult.price}`;
@@ -1271,9 +1314,12 @@ export async function fetchMarketplaceReviews(
     });
 
     // ── DATABASE INTEGRITY CHECK ───────────────────────────────────────────
-    // If both Scrap.do and Gemini extraction fail, abort without inserting dummy or broken rows
+    // If both scraping and Gemini extraction fail, abort without inserting dummy or broken rows
     if (deduplicatedReviews.length === 0) {
-      console.warn(`[Scraper] Both Scrap.do and Gemini extraction failed to yield reviews for: ${url}`);
+      console.warn(`[Scraper] Both Scraping and Gemini extraction failed to yield reviews for: ${url}`);
+      if (debugHtmlSnapshot) {
+        console.log("[DEBUG HTML SNAPSHOT]", debugHtmlSnapshot.slice(0, 500));
+      }
       return {
         success: false,
         marketplace,
@@ -1455,8 +1501,9 @@ export async function estimateAuditPreFlight(
     let html = "";
     const brightDataKey = process.env.BRIGHTDATA_API_KEY;
     if (brightDataKey) {
-      const bdRes = await fetchWithBrightData(url, 8000, true);
-      if (bdRes.ok) html = bdRes.html;
+      try {
+        html = await fetchWithBrightData(url);
+      } catch(e) {}
     }
     if (!html) {
       const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { 'User-Agent': getRandomUserAgent() } });
@@ -1526,10 +1573,10 @@ export async function scrapeFlipkart(productUrl: string) {
 
   // Fetch HTML through Bright Data Web Unlocker to bypass Akamai / Bot-Guard
   const fetchPage = async (target: string) => {
-    const bdRes = await fetchWithBrightData(target, 60000);
-    if (bdRes.ok && bdRes.html) {
-      return bdRes.html;
-    }
+    try {
+      const bdHtml = await fetchWithBrightData(target);
+      if (bdHtml) return bdHtml;
+    } catch(e) {}
     // Direct fallback if Bright Data fails
     const res = await fetch(target, {
       headers: {
