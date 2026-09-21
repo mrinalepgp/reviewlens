@@ -147,7 +147,8 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
 
 function extractReviewsFromInitialState(html: string): Array<{ rating: number; title: string; text: string; author?: string; date?: string }> {
   try {
-    const match = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});<\/script>/);
+    const match = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});(?:\s*<\/script>|\s*\n)/)
+      || html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
     if (!match) return [];
     
     const state = JSON.parse(match[1]);
@@ -157,15 +158,16 @@ function extractReviewsFromInitialState(html: string): Array<{ rating: number; t
       if (!obj || typeof obj !== 'object') return;
       
       // Target Flipkart Review Card components inside state
-      if (obj.type === 'ReviewCard' || (obj.value && obj.value.reviewType) || (obj.value && obj.value.text && obj.value.rating)) {
+      if (obj.type === 'ReviewCard' || (obj.value && obj.value.reviewType) || (obj.value && (obj.value.text || obj.value.reviewText) && obj.value.rating)) {
         const val = obj.value || obj;
-        if (val.text || val.title) {
+        const reviewText = val.text || val.reviewText || val.comment || val.description || val.title;
+        if (reviewText) {
           reviews.push({
             rating: Number(val.rating) || 5,
             title: val.title || 'Verified Purchase',
-            text: val.text || val.title,
-            author: val.author || val.reviewerName || 'Flipkart Customer',
-            date: val.createdDate || 'Recent'
+            text: reviewText,
+            author: val.author || val.reviewerName || val.userName || val.name || 'Flipkart Customer',
+            date: val.createdDate || val.date || val.reviewDate || 'Recent'
           });
         }
       }
@@ -262,62 +264,100 @@ interface LLMExtractionResult {
   reviews: Array<{ text: string; rating: number; date: string }>;
 }
 
+export const flipkartCardSelectors = [
+  'div._2wzgFH',
+  'div.cPHDOP div._1AtVbE',
+  'div.col-12-12 > div._16PBlm',
+  'div._27M-vq',
+  'div.EKF0PI',
+  'div.ZmyHeo',
+  'div[data-review-id]'
+];
+
 /**
  * Sanitizes raw HTML before sending to Gemini Flash:
- * Strips script, style, svg, iframe, noscript, base64 strings, and DOM noise.
- * Slices down to the most relevant 30,000 characters.
+ * Specifically targets review card blocks (div._2wzgFH, div.cPHDOP, div.ZmyHeo, etc.)
+ * or passes up to 50,000 chars of relevant HTML slice to prevent stripping reviews down to empty/214 chars.
  */
 export function sanitizeHtmlForGemini(rawHtml: string): string {
   if (!rawHtml) return '';
   try {
     const $ = cheerio.load(rawHtml);
-    $('script, style, svg, iframe, noscript, audio, video, canvas, link, meta, nav, footer, header').remove();
 
-    // Strip base64 or long data attributes
-    $('*').each((_, el) => {
-      const attribs = (el as any).attribs;
-      if (attribs) {
-        for (const attr in attribs) {
-          if (attribs[attr]?.startsWith('data:image') || attribs[attr]?.length > 200) {
-            $(el).removeAttr(attr);
-          }
+    // 1. Search specifically for review sections or review card blocks
+    const reviewCards = $(flipkartCardSelectors.join(', '));
+    const collectedParts: string[] = [];
+
+    // Title and price cues
+    const titleCue = $('h1, span.B_NuCI, span.VU-ZEz, .public-title').first().text().trim();
+    const priceCue = $('.Nx9bqj, div._30jeq3').first().text().trim();
+    if (titleCue || priceCue) {
+      collectedParts.push(`Product: ${titleCue}\nPrice: ${priceCue}`);
+    }
+
+    if (reviewCards.length > 0) {
+      const cardTexts: string[] = [];
+      reviewCards.slice(0, 40).each((_, el) => {
+        $(el).find('script, style, svg').remove();
+        const t = $(el).text().replace(/\s+/g, ' ').trim();
+        if (t.length > 15) {
+          cardTexts.push(t);
         }
-      }
-    });
-
-    let text = $('body').text() || $.text() || '';
-    text = text
-      .replace(/data:image\/[a-zA-Z0-9+;=,-]+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (text.length < 1500 && rawHtml.length > 5000) {
-      const regexText = rawHtml
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
-        .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, ' ')
-        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, ' ')
-        .replace(/data:image\/[a-zA-Z0-9+;=,-]+/g, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      if (regexText.length > text.length) {
-        text = regexText;
+      });
+      if (cardTexts.length > 0) {
+        collectedParts.push('=== REVIEWS EXTRACTED FROM DOM BLOCKS ===\n' + cardTexts.join('\n---\n'));
       }
     }
 
-    return text.slice(0, 30000);
-  } catch {
-    let cleaned = rawHtml
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '')
-      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
-      .replace(/data:image\/[a-zA-Z]+;base64,[^"'\s]+/g, '')
+    // Dedicated review section container or headers
+    const reviewContainer = $('div.col-12-12:contains("Reviews"), div._1AtVbE:contains("Ratings & Reviews"), section:contains("Reviews")');
+    if (reviewContainer.length > 0) {
+      reviewContainer.find('script, style, svg').remove();
+      const containerText = reviewContainer.first().text().replace(/\s+/g, ' ').trim();
+      if (containerText.length > 100) {
+        collectedParts.push('=== REVIEW CONTAINER TEXT ===\n' + containerText);
+      }
+    }
+
+    const specificReviewContent = collectedParts.join('\n\n');
+    if (specificReviewContent.length >= 400) {
+      return specificReviewContent.slice(0, 50000);
+    }
+
+    // 2. Search for "Ratings & Reviews" or "Customer Reviews" in rawHtml and slice a generous window
+    const reviewAnchorIdx = rawHtml.search(/ratings?\s*(&|and)\s*reviews|customer\s*reviews|review-section/i);
+    if (reviewAnchorIdx !== -1) {
+      const startIdx = Math.max(0, reviewAnchorIdx - 2000);
+      const htmlSlice = rawHtml.slice(startIdx, startIdx + 50000);
+      const $slice = cheerio.load(htmlSlice);
+      $slice('script, style, svg, iframe').remove();
+      const sliceText = $slice.text().replace(/\s+/g, ' ').trim();
+      if (sliceText.length > 300) {
+        return (titleCue ? `Product: ${titleCue}\n\n` : '') + sliceText.slice(0, 50000);
+      }
+    }
+
+    // 3. General Cheerio text extraction (without over-stripping)
+    $('script, style, svg, iframe, noscript, audio, video, canvas, link, meta').remove();
+    let text = $('body').text() || $.text() || '';
+    text = text.replace(/data:image\/[a-zA-Z0-9+;=,-]+/g, '').replace(/\s+/g, ' ').trim();
+
+    if (text.length > 500) {
+      return text.slice(0, 50000);
+    }
+
+    // 4. Safe direct HTML slice fallback up to 50,000 characters
+    const directSlice = rawHtml
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    return cleaned.slice(0, 30000);
+
+    return directSlice.slice(0, 50000);
+  } catch (err) {
+    console.warn('[Scraper] sanitizeHtmlForGemini fallback due to error:', err);
+    return rawHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50000);
   }
 }
 
@@ -714,6 +754,101 @@ export function normalizeFlipkartUrl(rawUrl: string): FlipkartNormalizedUrls {
   }
 }
 
+/**
+ * PRESERVE SLUG IN REVIEW URL GENERATION:
+ * Ensures getFlipkartReviewUrls ALWAYS includes the product slug:
+ * https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${page}
+ * Flipkart REJECTS slug-less review URLs with 301 redirects (returning 252 or 1780 byte payloads).
+ */
+export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number): string[] {
+  try {
+    const urlObj = new URL(targetUrl);
+    const pid = urlObj.searchParams.get('pid');
+    
+    // Extract itmId from pathname (e.g. /p/itmea1db41c24707)
+    const itmMatch = urlObj.pathname.match(/\/p\/(itm[a-zA-Z0-9]+)/) || urlObj.pathname.match(/\/(?:p|product-reviews)\/(itm[a-zA-Z0-9]+)/);
+    const itmId = itmMatch ? itmMatch[1] : '';
+
+    // Extract product slug: anything before /p/ (e.g. "red-tape-men-clogs")
+    const pathnameClean = urlObj.pathname.replace(/^\/+/, '');
+    const slug = pathnameClean.includes('/p/') 
+      ? pathnameClean.split('/p/')[0] 
+      : pathnameClean.includes('/product-reviews/') 
+        ? pathnameClean.split('/product-reviews/')[0] 
+        : '';
+
+    const pagesNeeded = Math.min(Math.ceil(requestedCount / 10), 10);
+    const urls: string[] = [];
+
+    for (let p = 1; p <= pagesNeeded; p++) {
+      if (slug && itmId && pid) {
+        // MUST INCLUDE SLUG TO PREVENT FLIPKART 301 REDIRECT
+        urls.push(`https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${p}`);
+      } else {
+        urls.push(`${targetUrl}&page=${p}`);
+      }
+    }
+    return urls;
+  } catch (e) {
+    return [targetUrl];
+  }
+}
+
+/**
+ * Universal Cheerio Review Parser across Flipkart Product and Review Pages
+ * Utilizes the enterprise flipkartCardSelectors array:
+ * ['div._2wzgFH', 'div.cPHDOP div._1AtVbE', 'div.col-12-12 > div._16PBlm', 'div._27M-vq', 'div.EKF0PI', 'div.ZmyHeo', 'div[data-review-id]']
+ */
+export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
+  rating: number;
+  title?: string;
+  text: string;
+  author?: string;
+  date?: string;
+}> {
+  const reviews: Array<{
+    rating: number;
+    title?: string;
+    text: string;
+    author?: string;
+    date?: string;
+  }> = [];
+
+  let reviewCards = $(flipkartCardSelectors.join(', '));
+  if (reviewCards.length === 0) {
+    const stars = $('div.XQDdHH, div._3LWZlK');
+    if (stars.length > 0) {
+      reviewCards = stars.closest('div').parent() as any;
+    }
+  }
+
+  reviewCards.each((idx, el) => {
+    const ratingText = $(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz').first().text().trim();
+    const titleText = $(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
+    let rawText = $(el).find('div.t-ZTKy > div > div, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7, ._6t1Wql').first().text().trim();
+    if (!rawText && $(el).hasClass('ZmyHeo')) {
+      rawText = $(el).text().trim();
+    }
+    rawText = rawText.replace(/READ MORE/gi, '').trim() || titleText;
+
+    const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 5;
+    const authorText = $(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ, p._2V5EHH').first().text().trim();
+    const dateText = $(el).find('p._2mcML^, p._331-kn, p._2sc7ZR ~ p, span._2V5rqZ ~ p').last().text().trim();
+
+    if (rawText && rawText.length > 5) {
+      reviews.push({
+        rating: Math.min(5, Math.max(1, parsedRating)),
+        title: titleText || 'Verified Review',
+        text: rawText,
+        author: authorText || 'Flipkart Customer',
+        date: dateText || ''
+      });
+    }
+  });
+
+  return reviews;
+}
+
 export function sanitizeUrl(url: string, marketplace: Marketplace): string {
   try {
     if (marketplace === 'flipkart') {
@@ -850,38 +985,17 @@ async function extractReviewsFromFlipkartPageHtml(
     pageCandidates.push(...revWinData.reviews);
   }
 
-  // Level 2: DOM Selectors for Flipkart dedicated reviews page
+  // Level 2: DOM Selectors for Flipkart dedicated reviews page using flipkartCardSelectors
   const $rev = cheerio.load(revHtml);
-  
-  let reviewCards = $rev('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, div.EKF0PI, div[data-review-id]');
-  
-  // Content Fallback Safeguard (heuristic)
-  if (reviewCards.length === 0) {
-    const stars = $rev('div.XQDdHH, div._3LWZlK');
-    if (stars.length > 0) {
-      reviewCards = stars.closest('div').parent() as any;
-    }
+  const domReviews = parseCheerioReviewsFromHtml($rev);
+  for (const r of domReviews) {
+    pageCandidates.push({
+      text: r.text,
+      rating: r.rating,
+      author: r.author,
+      date: r.date
+    });
   }
-
-  reviewCards.each((idx, el) => {
-    const ratingText = $rev(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz').first().text().trim();
-    const titleText = $rev(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
-    let rawText = $rev(el).find('div.t-ZTKy > div > div, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().trim();
-    rawText = rawText.replace(/READ MORE/gi, '').trim() || titleText;
-      
-    const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 5;
-    const authorText = $rev(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ').first().text().trim();
-    const dateText = $rev(el).find('p._2mcML^, p._331-kn, p._2sc7ZR ~ p, span._2V5rqZ ~ p').last().text().trim();
-
-    if (rawText || titleText) {
-      pageCandidates.push({
-        text: rawText,
-        rating: Math.min(5, Math.max(1, parsedRating)),
-        author: authorText || 'Flipkart Customer',
-        date: dateText || ''
-      });
-    }
-  });
 
   // Level 3 Gemini Flash Fallback ONLY if Level 1 & 2 found 0 reviews on this page AND allowGeminiFallback is enabled
   if (pageCandidates.length === 0 && allowGeminiFallback && revHtml.length > 300) {
@@ -900,6 +1014,278 @@ async function extractReviewsFromFlipkartPageHtml(
     title: pageTitle,
     price: pagePrice,
     reviews: pageCandidates
+  };
+}
+
+/**
+ * Dedicated Flipkart Review Scraper & Harvester
+ * 1. Fetches canonical product landing page (1.4MB).
+ * 2. Immediately extracts baseline reviews via Cheerio & JSON hydration.
+ * 3. Builds slug-preserved pagination URLs to prevent 301 redirects.
+ * 4. Gracefully uses baseline reviews if pagination returns < 2000 bytes.
+ */
+export async function scrapeFlipkartReviews(
+  targetUrl: string,
+  requestedCount: number = 50,
+  options?: ScraperOptions,
+  scrapeStartTime: number = Date.now()
+): Promise<{
+  scrapedTitle?: string;
+  scrapedPrice?: string;
+  reviews: ReviewPayload[];
+  debugHtmlSnapshot?: string;
+}> {
+  const SCRAPE_DEADLINE_MS = 40000;
+  let scrapedTitle = '';
+  let scrapedPrice = '';
+  const allExtractedReviews: ReviewPayload[] = [];
+  let debugHtmlSnapshot = '';
+
+  const { slug, itmId, pid, canonicalProductUrl } = normalizeFlipkartUrl(targetUrl);
+
+  // ── Step 1: Fetch Canonical Product Page (1.4MB) ────────────────
+  let prodHtml = '';
+  try {
+    console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
+    prodHtml = await fetchWithBrightData(canonicalProductUrl);
+    debugHtmlSnapshot = prodHtml;
+  } catch (e: any) {
+    console.warn('[Scraper] Canonical fetch failed:', e.message);
+  }
+
+  // ── Step 2: Extract reviews from the 1.4MB landing page immediately ──
+  if (prodHtml) {
+    // 2a. Level 1A: __NEXT_DATA__
+    const nextData = extractFromNextData(prodHtml);
+    if (nextData.title) scrapedTitle = nextData.title;
+    if (nextData.price) scrapedPrice = `₹${nextData.price}`;
+    for (const r of nextData.reviews) {
+      allExtractedReviews.push({
+        id: `fk_hydra_${allExtractedReviews.length}`,
+        marketplace: 'flipkart',
+        rating: r.rating,
+        content: r.text,
+        author: r.author || 'Verified Buyer',
+        date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+      });
+    }
+
+    // 2b. JSON Hydration State (window.__INITIAL_STATE__)
+    const stateReviews = extractReviewsFromInitialState(prodHtml);
+    for (const r of stateReviews) {
+      allExtractedReviews.push({
+        id: `fk_state_${allExtractedReviews.length}`,
+        marketplace: 'flipkart',
+        rating: r.rating,
+        title: r.title,
+        content: r.text,
+        author: r.author || 'Verified Buyer',
+        date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+      });
+    }
+
+    // 2c. Level 1B: Window state fallback
+    if (!scrapedTitle || allExtractedReviews.length === 0) {
+      const winData = extractFromWindowState(prodHtml);
+      if (!scrapedTitle && winData.title) scrapedTitle = winData.title;
+      if (!scrapedPrice && winData.price) scrapedPrice = `₹${winData.price}`;
+      for (const r of winData.reviews) {
+        allExtractedReviews.push({
+          id: `fk_win_${allExtractedReviews.length}`,
+          marketplace: 'flipkart',
+          rating: r.rating,
+          content: r.text,
+          author: r.author || 'Verified Buyer',
+          date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+        });
+      }
+    }
+
+    // 2d. Cheerio DOM review extraction using cardSelectors
+    const $prod = cheerio.load(prodHtml);
+    const domReviews = parseCheerioReviewsFromHtml($prod);
+    for (const r of domReviews) {
+      allExtractedReviews.push({
+        id: `fk_landing_dom_${allExtractedReviews.length}`,
+        marketplace: 'flipkart',
+        rating: r.rating,
+        title: r.title,
+        content: r.text,
+        author: r.author || 'Flipkart Customer',
+        date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+      });
+    }
+
+    // Metadata extraction (Title & Price)
+    if (!scrapedTitle || !scrapedPrice) {
+      const jsonLd = extractFromJsonLd($prod);
+      if (!scrapedTitle && jsonLd.title) scrapedTitle = jsonLd.title;
+      if (!scrapedPrice && jsonLd.price) scrapedPrice = `₹${jsonLd.price}`;
+    }
+    if (!scrapedTitle || !scrapedPrice) {
+      const meta = extractFromMetaTags($prod);
+      if (!scrapedTitle && meta.title) scrapedTitle = meta.title;
+      if (!scrapedPrice && meta.price) scrapedPrice = `₹${meta.price}`;
+    }
+    if (!scrapedTitle) {
+      const domTitle = $prod('span.B_NuCI, h1._6EBuvT, h1._35KyD6, span.VU-ZEz, h1').first().text().trim();
+      if (domTitle) scrapedTitle = domTitle;
+    }
+    if (!scrapedPrice) {
+      const domPrice = $prod('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
+      if (domPrice) scrapedPrice = domPrice;
+    }
+
+    console.log(`[Scraper] Baseline reviews extracted from 1.4MB landing page: ${allExtractedReviews.length}`);
+
+    // Level 3 Gemini Flash Fallback on landing page if 0 reviews extracted so far
+    if (allExtractedReviews.length === 0 && prodHtml.length > 2000) {
+      console.log('[Scraper] 0 reviews found from state/DOM. Invoking Level 3 Gemini Flash fallback on landing page HTML...');
+      const geminiResult = await extractViaGeminiSelfHealing(prodHtml, 'flipkart');
+      if (geminiResult) {
+        if (!scrapedTitle && geminiResult.title) scrapedTitle = geminiResult.title;
+        if (!scrapedPrice && geminiResult.price) scrapedPrice = `₹${geminiResult.price}`;
+        if (Array.isArray(geminiResult.reviews)) {
+          for (const r of geminiResult.reviews) {
+            if (r.text && r.text.trim().length > 10) {
+              allExtractedReviews.push({
+                id: `fk_gemini_landing_${allExtractedReviews.length}`,
+                marketplace: 'flipkart',
+                rating: Math.min(5, Math.max(1, r.rating || 4)),
+                content: r.text.trim(),
+                author: 'Verified Buyer',
+                date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Step 3: Fast Parallel Pagination Loop with Slug-Preserved URLs ──────────
+  const targetReviewLimit = Math.min(Math.max(requestedCount || 50, 5), 2000);
+  const seenReviewKeys = new Set<string>();
+
+  // Register baseline reviews in deduplication set
+  for (const r of allExtractedReviews) {
+    const key = r.content.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
+    if (key) seenReviewKeys.add(key);
+  }
+
+  // Generate slug-preserved review URLs
+  const paginationUrls = getFlipkartReviewUrls(targetUrl, targetReviewLimit);
+  console.log(`[Scraper] Generated ${paginationUrls.length} slug-preserved review URLs for Flipkart`);
+
+  const BATCH_SIZE = 4;
+  const maxPages = paginationUrls.length;
+  let currentBatchStartPage = 1;
+
+  while (allExtractedReviews.length < targetReviewLimit && currentBatchStartPage <= maxPages) {
+    const elapsed = Date.now() - scrapeStartTime;
+    if (elapsed >= SCRAPE_DEADLINE_MS) {
+      console.warn(`[Scraper] 40s safety cutoff reached (${elapsed}ms elapsed). Proceeding with ${allExtractedReviews.length} collected reviews.`);
+      break;
+    }
+
+    const batchPages: number[] = [];
+    for (let p = currentBatchStartPage; p < currentBatchStartPage + BATCH_SIZE && p <= maxPages; p++) {
+      batchPages.push(p);
+    }
+    if (batchPages.length === 0) break;
+
+    console.log(`[Scraper] Fetching parallel batch of pages [${batchPages.join(', ')}] (render=false)...`);
+
+    const batchPromises = batchPages.map(async (p) => {
+      // Must use slug-preserved URL to avoid Flipkart 301 redirect
+      const pageUrl = paginationUrls[p - 1] || (slug && itmId && pid
+        ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${p}`
+        : `${targetUrl}&page=${p}`);
+
+      const pageStart = Date.now();
+      let revHtml = '';
+      try {
+        revHtml = await fetchWithBrightData(pageUrl);
+      } catch (e: any) {
+        console.warn(`[Scraper] Page ${p} fetch failed:`, e.message);
+      }
+      const pageLatency = Date.now() - pageStart;
+      console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms (${revHtml.length} bytes)`);
+
+      // GRACEFUL SUCCESS CONTRACT: If pagination fails or returns < 2000 bytes, DO NOT abort!
+      if (!revHtml || revHtml.length < 2000) {
+        console.warn(`[Scraper] Page ${p} returned empty/suspicious HTML (< 2000 bytes: ${revHtml?.length || 0} bytes)`);
+        return { page: p, title: undefined, price: undefined, reviews: [] };
+      }
+
+      // Try state extraction first
+      const stateReviews = extractReviewsFromInitialState(revHtml);
+      if (stateReviews.length > 0) {
+        return { page: p, title: undefined, price: undefined, reviews: stateReviews };
+      }
+
+      const allowGemini = (p === 1 && allExtractedReviews.length === 0);
+      const extracted = await extractReviewsFromFlipkartPageHtml(revHtml, p, allowGemini);
+      return { page: p, ...extracted };
+    });
+
+    const settledResults = await Promise.allSettled(batchPromises);
+    const batchResults = settledResults
+      .filter(r => r.status === 'fulfilled')
+      .map(r => (r as PromiseFulfilledResult<any>).value);
+
+    batchResults.sort((a, b) => a.page - b.page);
+
+    let newReviewsInBatch = 0;
+    for (const pageRes of batchResults) {
+      if (!scrapedTitle && pageRes.title) scrapedTitle = pageRes.title;
+      if (!scrapedPrice && pageRes.price) scrapedPrice = `₹${pageRes.price}`;
+
+      for (const cand of pageRes.reviews) {
+        if (allExtractedReviews.length >= targetReviewLimit) break;
+        const text = (cand.text || '').trim();
+        if (text.length < 10) continue;
+
+        if (!isReviewInCohort(cand.date, options?.startDate, options?.endDate)) {
+          continue;
+        }
+
+        const dedupeKey = text.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
+        if (dedupeKey && !seenReviewKeys.has(dedupeKey)) {
+          seenReviewKeys.add(dedupeKey);
+          allExtractedReviews.push({
+            id: `fk_rev_p${pageRes.page}_${allExtractedReviews.length}`,
+            marketplace: 'flipkart',
+            rating: Math.min(5, Math.max(1, Number(cand.rating) || 4)),
+            content: text,
+            author: cand.author || 'Verified Buyer',
+            date: cand.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+          });
+          newReviewsInBatch++;
+        }
+      }
+
+      console.log(`[Scraper] Page ${pageRes.page}: total collected ${allExtractedReviews.length}/${targetReviewLimit} reviews`);
+      if (allExtractedReviews.length >= targetReviewLimit) break;
+    }
+
+    if (allExtractedReviews.length >= targetReviewLimit) break;
+    if (newReviewsInBatch === 0 && currentBatchStartPage > 1) {
+      console.log(`[Scraper] No new reviews found across batch [${batchPages.join(', ')}]. Ending pagination.`);
+      break;
+    }
+
+    currentBatchStartPage += BATCH_SIZE;
+  }
+
+  // Graceful log: baseline reviews preserved even if pagination failed
+  console.log(`[Scraper] Total Flipkart reviews harvested (landing + pagination): ${allExtractedReviews.length}`);
+
+  return {
+    scrapedTitle,
+    scrapedPrice,
+    reviews: allExtractedReviews,
+    debugHtmlSnapshot
   };
 }
 
@@ -947,277 +1333,18 @@ export async function fetchMarketplaceReviews(
 
   try {
     const scrapeStartTime = Date.now();
-    const SCRAPE_DEADLINE_MS = 40000; // 40-second safety cutoff to guarantee completion well within 45s/60s limits
+    const targetReviewLimit = Math.min(Math.max(options?.reviewLimit || 50, 5), 2000);
     let scrapedTitle = '';
     let scrapedPrice = '';
     const allExtractedReviews: ReviewPayload[] = [];
     let debugHtmlSnapshot = '';
 
     if (marketplace === 'flipkart') {
-      const { slug, itmId, pid, canonicalProductUrl, dedicatedReviewsUrl } = normalizeFlipkartUrl(url);
-
-      // ── Step 1: Fetch Canonical Product Page for Metadata ────────────────
-      let prodHtml = '';
-      try {
-        console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
-        prodHtml = await fetchWithBrightData(canonicalProductUrl);
-        debugHtmlSnapshot = prodHtml;
-      } catch (e: any) {
-        console.warn("[Scraper] Canonical fetch failed", e.message);
-      }
-
-      if (prodHtml) {
-        // Level 1A: __NEXT_DATA__
-        const nextData = extractFromNextData(prodHtml);
-        if (nextData.title) scrapedTitle = nextData.title;
-        if (nextData.price) scrapedPrice = `₹${nextData.price}`;
-        for (const r of nextData.reviews) {
-          allExtractedReviews.push({
-            id: `fk_hydra_${allExtractedReviews.length}`,
-            marketplace: 'flipkart',
-            rating: r.rating,
-            content: r.text,
-            author: r.author || 'Verified Buyer',
-            date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
-          });
-        }
-
-        // [Extract JSON Hydration State]
-        const stateReviews = extractReviewsFromInitialState(prodHtml);
-        for (const r of stateReviews) {
-            allExtractedReviews.push({
-              id: `fk_state_${allExtractedReviews.length}`,
-              marketplace: 'flipkart',
-              rating: r.rating,
-              content: r.text,
-              author: r.author || 'Verified Buyer',
-              date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
-            });
-        }
-
-        // Level 1B: window.__INITIAL_STATE__
-        if (!scrapedTitle || allExtractedReviews.length === 0) {
-          const winData = extractFromWindowState(prodHtml);
-          if (!scrapedTitle && winData.title) scrapedTitle = winData.title;
-          if (!scrapedPrice && winData.price) scrapedPrice = `₹${winData.price}`;
-          for (const r of winData.reviews) {
-            allExtractedReviews.push({
-              id: `fk_win_${allExtractedReviews.length}`,
-              marketplace: 'flipkart',
-              rating: r.rating,
-              content: r.text,
-              author: r.author || 'Verified Buyer',
-              date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
-            });
-          }
-        }
-
-        // Level 1C: JSON-LD
-        const $prod = cheerio.load(prodHtml);
-        if (!scrapedTitle || !scrapedPrice) {
-          const jsonLd = extractFromJsonLd($prod);
-          if (!scrapedTitle && jsonLd.title) scrapedTitle = jsonLd.title;
-          if (!scrapedPrice && jsonLd.price) scrapedPrice = `₹${jsonLd.price}`;
-        }
-
-        // Level 1D: Meta tags
-        if (!scrapedTitle || !scrapedPrice) {
-          const meta = extractFromMetaTags($prod);
-          if (!scrapedTitle && meta.title) scrapedTitle = meta.title;
-          if (!scrapedPrice && meta.price) scrapedPrice = `₹${meta.price}`;
-        }
-
-        // Level 2: DOM Selectors for Flipkart product page
-        if (!scrapedTitle) {
-          const domTitle = $prod('span.B_NuCI, h1._6EBuvT, h1._35KyD6, span.VU-ZEz, h1').first().text().trim();
-          if (domTitle) scrapedTitle = domTitle;
-        }
-
-        if (!scrapedPrice) {
-          const domPrice = $prod('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
-          if (domPrice) scrapedPrice = domPrice;
-        }
-
-        // Check for reviews in product page DOM
-        let prodReviewCards = $prod('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, div.EKF0PI, div[data-review-id]');
-        if (prodReviewCards.length === 0) {
-          const stars = $prod('div.XQDdHH, div._3LWZlK');
-          if (stars.length > 0) {
-            prodReviewCards = stars.closest('div').parent() as any;
-          }
-        }
-        prodReviewCards.each((idx, el) => {
-          const ratingText = $prod(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz').first().text().trim();
-          const titleText = $prod(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
-          let rawText = $prod(el).find('div.t-ZTKy > div > div, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().trim();
-          rawText = rawText.replace(/READ MORE/gi, '').trim() || titleText;
-            
-          const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 5;
-          const authorText = $prod(el).find('p._2sc7ZR, span._2V5rqZ, p._2V5rqZ').first().text().trim();
-          const dateText = $prod(el).find('p._2mcML^, p._331-kn, p._2sc7ZR ~ p, span._2V5rqZ ~ p').last().text().trim();
-
-          if (rawText || titleText) {
-            allExtractedReviews.push({
-              id: `fk_dom_${idx}`,
-              marketplace: 'flipkart',
-              rating: Math.min(5, Math.max(1, parsedRating)),
-              content: rawText,
-              author: authorText || 'Flipkart Customer',
-              date: dateText || new Date(Date.now() - idx * 43200000).toISOString()
-            });
-          }
-        });
-      }
-
-      // ── Step 2: Customer Reviews Fast Parallel Pagination Loop ───────────────
-      // Flipkart renders 6–10 reviews per page at:
-      // https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${page}
-      const targetReviewLimit = Math.min(Math.max(options?.reviewLimit || 50, 5), 2000);
-      const seenReviewKeys = new Set<string>();
-
-      // Register any reviews already extracted from the canonical product page
-      for (const r of allExtractedReviews) {
-        const key = r.content.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
-        if (key) seenReviewKeys.add(key);
-      }
-
-      const BATCH_SIZE = 4;
-      const maxPages = Math.min(Math.ceil(targetReviewLimit / 6) + 2, 40);
-      let currentBatchStartPage = 1;
-
-      while (allExtractedReviews.length < targetReviewLimit && currentBatchStartPage <= maxPages) {
-        // Hard timeout safety valve: if 40 seconds elapse, break and proceed immediately
-        const elapsed = Date.now() - scrapeStartTime;
-        if (elapsed >= SCRAPE_DEADLINE_MS) {
-          console.warn(`[Scraper] 40s safety cutoff reached (${elapsed}ms elapsed). Proceeding immediately with ${allExtractedReviews.length} collected reviews.`);
-          break;
-        }
-
-        const batchPages: number[] = [];
-        for (let p = currentBatchStartPage; p < currentBatchStartPage + BATCH_SIZE && p <= maxPages; p++) {
-          batchPages.push(p);
-        }
-
-        if (batchPages.length === 0) break;
-
-        console.log(`[Scraper] Fetching parallel batch of pages [${batchPages.join(', ')}] (render=false)...`);
-
-        const remainingMs = Math.max(2000, SCRAPE_DEADLINE_MS - (Date.now() - scrapeStartTime));
-        const perPageTimeout = Math.min(12000, remainingMs);
-
-        const batchPromises = batchPages.map(async (p) => {
-          const pageUrl = (itmId && pid) 
-            ? `https://www.flipkart.com/product-reviews/${itmId}?pid=${encodeURIComponent(pid)}&page=${p}`
-            : `${url.includes('?') ? url : url + '?dummy=1'}&page=${p}`;
-          const pageStart = Date.now();
-          let revHtml = '';
-          try {
-             revHtml = await fetchWithBrightData(pageUrl);
-          } catch(e: any) {
-             console.warn("[Scraper] Page fetch failed", e.message);
-          }
-          const pageLatency = Date.now() - pageStart;
-          console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms`);
-          
-          if (!revHtml || revHtml.length < 1000) {
-            console.warn(`[Scraper] Page ${p} returned empty/suspicious HTML (< 1000 bytes)`);
-            return { page: p, title: undefined, price: undefined, reviews: [] };
-          }
-          
-          // Try state extraction first
-          const stateReviews = extractReviewsFromInitialState(revHtml);
-          if (stateReviews.length > 0) {
-              return { page: p, title: undefined, price: undefined, reviews: stateReviews };
-          }
-
-          const allowGemini = (p === 1 && allExtractedReviews.length === 0);
-          const extracted = await extractReviewsFromFlipkartPageHtml(revHtml, p, allowGemini);
-          return { page: p, ...extracted };
-        });
-
-        const settledResults = await Promise.allSettled(batchPromises);
-        const batchResults = settledResults
-          .filter(r => r.status === 'fulfilled')
-          .map(r => (r as PromiseFulfilledResult<any>).value);
-
-        // Sort results by page to preserve order
-        batchResults.sort((a, b) => a.page - b.page);
-
-        let newReviewsInBatch = 0;
-
-        for (const pageRes of batchResults) {
-          if (!scrapedTitle && pageRes.title) scrapedTitle = pageRes.title;
-          if (!scrapedPrice && pageRes.price) scrapedPrice = `₹${pageRes.price}`;
-
-          let newReviewsThisPage = 0;
-          for (const cand of pageRes.reviews) {
-            if (allExtractedReviews.length >= targetReviewLimit) break;
-            const text = (cand.text || '').trim();
-            if (text.length < 10) continue;
-
-            if (!isReviewInCohort(cand.date, options?.startDate, options?.endDate)) {
-              continue;
-            }
-
-            const dedupeKey = text.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
-            if (dedupeKey && !seenReviewKeys.has(dedupeKey)) {
-              seenReviewKeys.add(dedupeKey);
-              allExtractedReviews.push({
-                id: `fk_rev_p${pageRes.page}_${allExtractedReviews.length}`,
-                marketplace: 'flipkart',
-                rating: Math.min(5, Math.max(1, Number(cand.rating) || 4)),
-                content: text,
-                author: cand.author || 'Verified Buyer',
-                date: cand.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
-              });
-              newReviewsThisPage++;
-              newReviewsInBatch++;
-            }
-          }
-
-          console.log(`[Scraper] Page ${pageRes.page}: collected ${allExtractedReviews.length}/${targetReviewLimit} reviews`);
-
-          if (allExtractedReviews.length >= targetReviewLimit) {
-            console.log(`[Scraper] Target limit of ${targetReviewLimit} reviews reached.`);
-            break;
-          }
-        }
-
-        if (allExtractedReviews.length >= targetReviewLimit) {
-          break;
-        }
-
-        if (newReviewsInBatch === 0) {
-          console.log(`[Scraper] No new reviews found across batch [${batchPages.join(', ')}]. Reached end of catalog.`);
-          break;
-        }
-
-        currentBatchStartPage += BATCH_SIZE;
-      }
-
-      // If still missing reviews or title, try Gemini Flash on product page HTML
-      if ((allExtractedReviews.length === 0 || !scrapedTitle) && prodHtml && prodHtml.length > 200) {
-        console.log('[Scraper] Level 3 Gemini Flash fallback on Flipkart product HTML...');
-        const geminiResult = await extractViaGeminiSelfHealing(prodHtml, 'flipkart');
-        if (geminiResult) {
-          if (!scrapedTitle && geminiResult.title) scrapedTitle = geminiResult.title;
-          if (!scrapedPrice && geminiResult.price) scrapedPrice = `₹${geminiResult.price}`;
-          if (allExtractedReviews.length === 0 && Array.isArray(geminiResult.reviews)) {
-            for (const r of geminiResult.reviews) {
-              if (r.text && r.text.trim().length > 10) {
-                allExtractedReviews.push({
-                  id: `fk_gemini_prod_${allExtractedReviews.length}`,
-                  marketplace: 'flipkart',
-                  rating: Math.min(5, Math.max(1, r.rating || 4)),
-                  content: r.text.trim(),
-                  author: 'Verified Buyer',
-                  date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
-                });
-              }
-            }
-          }
-        }
-      }
+      const fkResult = await scrapeFlipkartReviews(url, targetReviewLimit, options, scrapeStartTime);
+      if (fkResult.scrapedTitle) scrapedTitle = fkResult.scrapedTitle;
+      if (fkResult.scrapedPrice) scrapedPrice = fkResult.scrapedPrice;
+      if (fkResult.debugHtmlSnapshot) debugHtmlSnapshot = fkResult.debugHtmlSnapshot;
+      allExtractedReviews.push(...fkResult.reviews);
     } else if (marketplace === 'meesho') {
       let mHtml = '';
       try {
