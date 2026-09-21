@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { exportSupplierAuditPDF } from '@/lib/pdfExport';
 import { AnalyzedProductSummary } from '@/app/actions';
 import { sanitizeCustomerQuote } from '@/lib/analyzer';
+import { deriveCategoryPrice } from '@/lib/scraper';
 
 export default function ExecutiveConsole({
   product,
@@ -33,14 +34,17 @@ export default function ExecutiveConsole({
 
   // Calculator & Action Suite State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
-  const [asp, setAsp] = useState<number>(() => (typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0));
+  const [asp, setAsp] = useState<number>(() => {
+    const parsed = typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0;
+    return parsed > 0 ? parsed : deriveCategoryPrice(product.title || '', (intelligence as any)?.category || '');
+  });
   const [returnCost, setReturnCost] = useState<number>(180);
   const [timeRange, setTimeRange] = useState<'ALL' | '30D' | '90D' | '1Y'>('ALL');
   const [showSafeHarborModal, setShowSafeHarborModal] = useState(false);
 
   useEffect(() => {
     const numPrice = typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0;
-    setAsp(numPrice);
+    setAsp(numPrice > 0 ? numPrice : deriveCategoryPrice(product.title || '', (intelligence as any)?.category || ''));
   }, [product.id, product.price, (product as any).asp, activeASP]);
 
   const handleExportPDF = () => {
@@ -222,8 +226,8 @@ Seller Central Admin`;
   };
   
   const riskScore = cohortRiskScore;
-  const projectedBleed = monthlyUnits * (asp + returnCost) * (riskScore / 100);
-  const recoverableMargin = projectedBleed * 0.40;
+  const monthlyBleed = monthlyUnits * (riskScore / 100) * returnCost;
+  const recoverableProfit = monthlyBleed * 0.65;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
@@ -377,7 +381,7 @@ Seller Central Admin`;
                 <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 shadow-[0_0_15px_rgba(244,63,94,0.08)] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>
                   <span className="text-xs font-bold text-rose-400 uppercase tracking-wide font-sans block">MONTHLY FINANCIAL BLEED</span>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 mb-1.5 tabular-nums font-sans">{formatINR(projectedBleed)}</div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-white mt-1 mb-1.5 tabular-nums font-sans">{formatINR(monthlyBleed)}</div>
                   <span className="text-[11px] text-rose-300/90 bg-rose-500/20 px-2.5 py-1 rounded inline-block border border-rose-500/30 font-sans font-medium">
                     Logistics + processing loss on preventable returns
                   </span>
@@ -386,7 +390,7 @@ Seller Central Admin`;
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 shadow-[0_0_15px_rgba(16,185,129,0.08)] relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-500"></div>
                   <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide font-sans block">RECOVERABLE PROFIT</span>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1 mb-1.5 tabular-nums font-sans">{formatINR(recoverableMargin)}</div>
+                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-1 mb-1.5 tabular-nums font-sans">{formatINR(recoverableProfit)}</div>
                   <span className="text-[11px] text-emerald-300/90 bg-emerald-500/20 px-2.5 py-1 rounded inline-block border border-emerald-500/30 font-sans font-medium">
                     With ReviewLens Listing &amp; QC Mitigation
                   </span>

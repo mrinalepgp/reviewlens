@@ -44,14 +44,14 @@ export async function analyzeUrlsAction(
 ): Promise<AnalyzeUrlsResponse> {
 
   try {
-    const scrapDoKey = process.env.SCRAPDO_API_KEY || process.env.SCRAPEDO_API_KEY;
+    const brightDataKey = process.env.BRIGHTDATA_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
 
-    if (!scrapDoKey) {
+    if (!brightDataKey) {
       return {
         success: false,
         summaries: [],
-        error: 'Environment Error: SCRAPDO_API_KEY is not configured in environment variables. Please set your Scrap.do API key to proceed.'
+        error: 'Environment Error: BRIGHTDATA_API_KEY is not configured in environment variables. Please set your Bright Data API key to proceed.'
       };
     }
 

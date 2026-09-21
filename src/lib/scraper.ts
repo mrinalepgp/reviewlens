@@ -702,39 +702,39 @@ export function sanitizeUrl(url: string, marketplace: Marketplace): string {
 }
 
 /**
- * Bulletproof Scrap.do Anti-Bot Request Utility
- * - url: encodeURIComponent(targetUrl)
- * - render: true
- * - geoCode: in (Indian residential routing to prevent Cloudflare blocks)
- * - wait_for: 3000
- * - Desktop headers: User-Agent, Accept, Accept-Language: en-US,en;q=0.9
+ * Bright Data Web Unlocker Enterprise Request Utility
+ * - Endpoint: POST https://api.brightdata.com/request
+ * - Authorization: Bearer ${BRIGHTDATA_API_KEY}
+ * - Body: { zone, url, format: "raw" }
  * - Full diagnostic output: console.log('[Scraper] Status:', res.status, 'Content-Length:', html.length);
  */
-export async function fetchWithScrapDo(
+export async function fetchWithBrightData(
   targetUrl: string,
   timeoutMs: number = 60000,
-  render: boolean = true
+  _render: boolean = true
 ): Promise<{ ok: boolean; status: number; html: string }> {
-  const apiKey = process.env.SCRAPDO_API_KEY || process.env.SCRAPEDO_API_KEY;
+  const apiKey = process.env.BRIGHTDATA_API_KEY;
   if (!apiKey) {
-    console.error('[Scraper] Neither SCRAPDO_API_KEY nor SCRAPEDO_API_KEY is configured in environment.');
+    console.error('[Scraper] BRIGHTDATA_API_KEY is not configured in environment.');
     return { ok: false, status: 500, html: '' };
   }
 
-  const desktopUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-  const proxyUrl = render
-    ? `https://api.scrape.do?token=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=true&geoCode=in&wait_for=3000`
-    : `https://api.scrape.do?token=${apiKey}&url=${encodeURIComponent(targetUrl)}&render=false&geoCode=in`;
+  const zone = process.env.BRIGHTDATA_ZONE || 'ecommerce_audit';
 
   try {
-    console.log(`[Scraper] Requesting Scrap.do (geoCode=in, render=${render}${render ? ', wait_for=3000' : ''}) for: ${targetUrl}`);
-    const res = await fetch(proxyUrl, {
+    console.log(`[Scraper] Requesting Bright Data Web Unlocker (zone=${zone}) for: ${targetUrl}`);
+    const res = await fetch('https://api.brightdata.com/request', {
+      method: 'POST',
       signal: AbortSignal.timeout(timeoutMs),
       headers: {
-        'User-Agent': desktopUserAgent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        zone,
+        url: targetUrl,
+        format: 'raw'
+      })
     });
 
     const html = await res.text();
@@ -746,7 +746,7 @@ export async function fetchWithScrapDo(
       html
     };
   } catch (err: any) {
-    console.error(`[Scraper] Scrap.do exception for ${targetUrl}:`, err.message);
+    console.error(`[Scraper] Bright Data exception for ${targetUrl}:`, err.message);
     return { ok: false, status: 504, html: '' };
   }
 }
@@ -871,16 +871,16 @@ export async function fetchMarketplaceReviews(
   url: string,
   options?: ScraperOptions
 ): Promise<ScrapingResult> {
-  const scrapDoKey = process.env.SCRAPDO_API_KEY || process.env.SCRAPEDO_API_KEY;
+  const brightDataKey = process.env.BRIGHTDATA_API_KEY;
   const geminiKey = process.env.GEMINI_API_KEY;
 
-  if (!scrapDoKey) {
+  if (!brightDataKey) {
     return {
       success: false,
       marketplace: 'unknown',
       url,
       reviews: [],
-      error: 'Environment Error: SCRAPDO_API_KEY is not configured in environment variables.'
+      error: 'Environment Error: BRIGHTDATA_API_KEY is not configured in environment variables.'
     };
   }
 
@@ -921,7 +921,7 @@ export async function fetchMarketplaceReviews(
 
       // ── Step 1: Fetch Canonical Product Page for Metadata ────────────────
       console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
-      const prodRes = await fetchWithScrapDo(canonicalProductUrl, 15000, true);
+      const prodRes = await fetchWithBrightData(canonicalProductUrl, 15000, true);
       const prodHtml = prodRes.html;
 
       if (prodHtml) {
@@ -1041,7 +1041,7 @@ export async function fetchMarketplaceReviews(
           const pageUrl = `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=${p}` : `?page=${p}`}`;
           const pageStart = Date.now();
           // Fast review fetch: render=false
-          const revRes = await fetchWithScrapDo(pageUrl, perPageTimeout, false);
+          const revRes = await fetchWithBrightData(pageUrl, perPageTimeout, false);
           const pageLatency = Date.now() - pageStart;
           console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms (status: ${revRes.status})`);
           if (!revRes.html) return { page: p, title: undefined, price: undefined, reviews: [] };
@@ -1132,7 +1132,7 @@ export async function fetchMarketplaceReviews(
       }
     } else if (marketplace === 'meesho') {
       console.log('[Scraper] Fetching Meesho product page:', sanitized);
-      const mRes = await fetchWithScrapDo(sanitized, 60000);
+      const mRes = await fetchWithBrightData(sanitized, 60000);
       const mHtml = mRes.html;
 
       if (mHtml) {
@@ -1234,7 +1234,7 @@ export async function fetchMarketplaceReviews(
       }
     } else {
       // Other platforms fallback
-      const resp = await fetchWithScrapDo(sanitized, 60000);
+      const resp = await fetchWithBrightData(sanitized, 60000);
       if (resp.html) {
         const geminiResult = await extractViaGeminiSelfHealing(resp.html, marketplace);
         if (geminiResult) {
@@ -1452,12 +1452,11 @@ export async function estimateAuditPreFlight(
   let totalReviews = 148;
 
   try {
-    const scrapeDoKey = process.env.SCRAPEDO_API_KEY || process.env.SCRAPINGDOG_API_KEY || process.env.PROXY_API_KEY;
     let html = "";
-    if (scrapeDoKey) {
-      const proxyUrl = `https://api.scrape.do?token=${scrapeDoKey}&url=${encodeURIComponent(url)}&render=true`;
-      const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-      if (res.ok) html = await res.text();
+    const brightDataKey = process.env.BRIGHTDATA_API_KEY;
+    if (brightDataKey) {
+      const bdRes = await fetchWithBrightData(url, 8000, true);
+      if (bdRes.ok) html = bdRes.html;
     }
     if (!html) {
       const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { 'User-Agent': getRandomUserAgent() } });
@@ -1525,17 +1524,14 @@ export async function estimateAuditPreFlight(
 export async function scrapeFlipkart(productUrl: string) {
   const { canonicalProductUrl, dedicatedReviewsUrl } = normalizeFlipkartUrl(productUrl);
 
-  // Fetch HTML through enterprise scraping gateway to bypass Akamai / Bot-Guard
+  // Fetch HTML through Bright Data Web Unlocker to bypass Akamai / Bot-Guard
   const fetchPage = async (target: string) => {
-    const scrapRes = await fetchWithScrapDo(target, 60000);
-    if (scrapRes.ok && scrapRes.html) {
-      return scrapRes.html;
+    const bdRes = await fetchWithBrightData(target, 60000);
+    if (bdRes.ok && bdRes.html) {
+      return bdRes.html;
     }
-    const gatewayUrl = process.env.SCRAPING_GATEWAY_URL 
-      ? `${process.env.SCRAPING_GATEWAY_URL}?url=${encodeURIComponent(target)}&token=${process.env.SCRAPING_API_KEY}`
-      : target;
-
-    const res = await fetch(gatewayUrl, {
+    // Direct fallback if Bright Data fails
+    const res = await fetch(target, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
