@@ -145,6 +145,44 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
   return result;
 }
 
+function extractReviewsFromInitialState(html: string): Array<{ rating: number; title: string; text: string; author?: string; date?: string }> {
+  try {
+    const match = html.match(/window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?});<\/script>/);
+    if (!match) return [];
+    
+    const state = JSON.parse(match[1]);
+    const reviews: Array<{ rating: number; title: string; text: string; author?: string; date?: string }> = [];
+
+    function traverse(obj: any) {
+      if (!obj || typeof obj !== 'object') return;
+      
+      // Target Flipkart Review Card components inside state
+      if (obj.type === 'ReviewCard' || (obj.value && obj.value.reviewType) || (obj.value && obj.value.text && obj.value.rating)) {
+        const val = obj.value || obj;
+        if (val.text || val.title) {
+          reviews.push({
+            rating: Number(val.rating) || 5,
+            title: val.title || 'Verified Purchase',
+            text: val.text || val.title,
+            author: val.author || val.reviewerName || 'Flipkart Customer',
+            date: val.createdDate || 'Recent'
+          });
+        }
+      }
+      
+      for (const key of Object.keys(obj)) {
+        traverse(obj[key]);
+      }
+    }
+
+    traverse(state);
+    return reviews;
+  } catch (err) {
+    console.warn('[Hydration Parser Warning] Failed to parse __INITIAL_STATE__ JSON:', err);
+    return [];
+  }
+}
+
 /**
  * LEVEL 1C: Extract from JSON-LD structured data (<script type="application/ld+json">).
  * Returns product name, price, rating, and review count from Schema.org markup.
@@ -944,6 +982,19 @@ export async function fetchMarketplaceReviews(
           });
         }
 
+        // [Extract JSON Hydration State]
+        const stateReviews = extractReviewsFromInitialState(prodHtml);
+        for (const r of stateReviews) {
+            allExtractedReviews.push({
+              id: `fk_state_${allExtractedReviews.length}`,
+              marketplace: 'flipkart',
+              rating: r.rating,
+              content: r.text,
+              author: r.author || 'Verified Buyer',
+              date: r.date || new Date(Date.now() - allExtractedReviews.length * 43200000).toISOString()
+            });
+        }
+
         // Level 1B: window.__INITIAL_STATE__
         if (!scrapedTitle || allExtractedReviews.length === 0) {
           const winData = extractFromWindowState(prodHtml);
@@ -1072,12 +1123,22 @@ export async function fetchMarketplaceReviews(
             console.warn(`[Scraper] Page ${p} returned empty/suspicious HTML (< 1000 bytes)`);
             return { page: p, title: undefined, price: undefined, reviews: [] };
           }
+          
+          // Try state extraction first
+          const stateReviews = extractReviewsFromInitialState(revHtml);
+          if (stateReviews.length > 0) {
+              return { page: p, title: undefined, price: undefined, reviews: stateReviews };
+          }
+
           const allowGemini = (p === 1 && allExtractedReviews.length === 0);
           const extracted = await extractReviewsFromFlipkartPageHtml(revHtml, p, allowGemini);
           return { page: p, ...extracted };
         });
 
-        const batchResults = await Promise.all(batchPromises);
+        const settledResults = await Promise.allSettled(batchPromises);
+        const batchResults = settledResults
+          .filter(r => r.status === 'fulfilled')
+          .map(r => (r as PromiseFulfilledResult<any>).value);
 
         // Sort results by page to preserve order
         batchResults.sort((a, b) => a.page - b.page);
