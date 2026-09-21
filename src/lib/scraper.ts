@@ -647,34 +647,22 @@ export function normalizeFlipkartUrl(rawUrl: string): FlipkartNormalizedUrls {
   try {
     const urlObj = new URL(rawUrl.trim());
     const pid = urlObj.searchParams.get('pid') || '';
-    const segments = urlObj.pathname.split('/').filter(Boolean);
-
+    
+    // Match itm ID from pathname (e.g. /p/itmea1db41c24707)
+    const itmMatch = urlObj.pathname.match(/\/(?:p|product-reviews)\/(itm[a-zA-Z0-9]+)/);
+    const itmId = itmMatch ? itmMatch[1] : '';
+    
+    // Extract slug
     let slug = 'product';
-    let itmId = '';
-
-    const pIdx = segments.findIndex(s => s === 'p' || s === 'product-reviews');
-    if (pIdx > 0) {
-      slug = segments.slice(0, pIdx).join('-');
-    } else if (segments.length > 0 && segments[0] !== 'p' && segments[0] !== 'product-reviews' && !segments[0].startsWith('itm')) {
-      slug = segments[0];
-    }
-
-    if (pIdx !== -1 && segments[pIdx + 1]) {
-      itmId = segments[pIdx + 1];
-    } else {
-      const itmSegment = segments.find(s => s.startsWith('itm'));
-      if (itmSegment) itmId = itmSegment;
-    }
-
-    // Clean tracking artifacts from itmId
-    itmId = itmId.replace(/[^a-zA-Z0-9]/g, '');
-    if (!itmId.toLowerCase().startsWith('itm')) {
-      itmId = `itm${itmId}`;
+    if (urlObj.pathname.includes('/p/')) {
+      slug = urlObj.pathname.split('/p/')[0].replace(/^\//, '');
+    } else if (urlObj.pathname.includes('/product-reviews/')) {
+      slug = urlObj.pathname.split('/product-reviews/')[0].replace(/^\//, '');
     }
 
     const pidParam = pid ? `?pid=${encodeURIComponent(pid)}` : '';
-    const canonicalProductUrl = `https://www.flipkart.com/${slug}/p/${itmId}${pidParam}`;
-    const dedicatedReviewsUrl = `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=1` : '?page=1'}`;
+    const canonicalProductUrl = slug && itmId ? `https://www.flipkart.com/${slug}/p/${itmId}${pidParam}` : rawUrl;
+    const dedicatedReviewsUrl = slug && itmId ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=1` : '?page=1'}` : `${rawUrl}&page=1`;
 
     return { slug, itmId, pid, canonicalProductUrl, dedicatedReviewsUrl };
   } catch {
@@ -826,7 +814,7 @@ async function extractReviewsFromFlipkartPageHtml(
   // Level 2: DOM Selectors for Flipkart dedicated reviews page
   const $rev = cheerio.load(revHtml);
   
-  let reviewCards = $rev('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, [data-review-id]');
+  let reviewCards = $rev('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, div.EKF0PI, div[data-review-id]');
   
   // Content Fallback Safeguard (heuristic)
   if (reviewCards.length === 0) {
@@ -839,7 +827,7 @@ async function extractReviewsFromFlipkartPageHtml(
   reviewCards.each((idx, el) => {
     const titleText = $rev(el).find('p._2-N8zT, p.z9E0IG, p._2xg6du, ._2-N8zT').first().text().trim();
     
-    const rawText = $rev(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy > div > div, div._2t8WExecution, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
+    const rawText = $rev(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
       || $rev(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
       
     const ratingText = $rev(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
@@ -1001,7 +989,7 @@ export async function fetchMarketplaceReviews(
         }
 
         // Check for reviews in product page DOM
-        let prodReviewCards = $prod('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, [data-review-id]');
+        let prodReviewCards = $prod('div._2wzgFH, div.cPHDOP div._1AtVbE, div.col-12-12 > div._16PBlm, div._27M-vq, div.EKF0PI, div[data-review-id]');
         if (prodReviewCards.length === 0) {
           const stars = $prod('div.XQDdHH, div._3LWZlK');
           if (stars.length > 0) {
@@ -1009,7 +997,7 @@ export async function fetchMarketplaceReviews(
           }
         }
         prodReviewCards.each((idx, el) => {
-          const rawText = $prod(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy > div > div, div._2t8WExecution, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
+          const rawText = $prod(el).find('div.t-ZTKy, div.ZmyHeo, div._16PBlm div.t-ZTKy, div.G6i1O7').first().text().replace(/READ MORE/gi, '').trim()
             || $prod(el).text().replace(/\s+/g, ' ').replace(/READ MORE/gi, '').trim();
           const ratingText = $prod(el).find('div._3LWZlK, div.XQDdHH, div._2d4LTz, div.XJA2L8, span[class*="Badge"], div[class*="Rating"]').first().text().trim();
           const parsedRating = Number(ratingText.replace(/[^0-9]/g, '')) || 4;
@@ -1066,7 +1054,9 @@ export async function fetchMarketplaceReviews(
         const perPageTimeout = Math.min(12000, remainingMs);
 
         const batchPromises = batchPages.map(async (p) => {
-          const pageUrl = `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=${p}` : `?page=${p}`}`;
+          const pageUrl = (slug && itmId && pid) 
+            ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${encodeURIComponent(pid)}&page=${p}`
+            : `${url.includes('?') ? url : url + '?dummy=1'}&page=${p}`;
           const pageStart = Date.now();
           let revHtml = '';
           try {
