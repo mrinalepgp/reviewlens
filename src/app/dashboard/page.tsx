@@ -1001,6 +1001,7 @@ export default function Dashboard() {
                 riskAssessment: p.risk_status || p.riskAssessment || 'safe',
                 negativeThemes: intel?.executiveScorecard?.primaryRiskDriver
                   ? [intel.executiveScorecard.primaryRiskDriver] : [],
+                raw_reviews: p.raw_reviews || intel.raw_reviews || intel.reviews || [],
                 intelligence: intel,
               };
             });

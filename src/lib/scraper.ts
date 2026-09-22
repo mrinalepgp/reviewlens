@@ -1272,8 +1272,20 @@ export async function scrapeFlipkartReviews(
       if (domTitle) scrapedTitle = domTitle;
     }
     if (!scrapedPrice) {
-      const domPrice = $prod('.Nx9bqj.CxhGGd, div.Nx9bqj, div._30jeq3._16Jk6d, div._30jeq3, div._16Jk6d, div._25bWox').first().text().trim();
-      if (domPrice) scrapedPrice = domPrice;
+      const domPrice = $prod('div.Nx9bqj.CxhGGd, div._30jeq3._16Jk6d, div._30jeq3, span.Nx9bqj, div._16Jk6d, div._25bWox').first().text().trim();
+      let matchedPriceStr = domPrice;
+      if (!matchedPriceStr) {
+        const regexMatch = prodHtml.match(/"(?:specialP|p)rice":\s*"?(\d+)"?/);
+        if (regexMatch && regexMatch[1]) {
+          matchedPriceStr = regexMatch[1];
+        }
+      }
+      if (matchedPriceStr) {
+        const parsedInt = parseInt(matchedPriceStr.replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(parsedInt) && parsedInt > 0) {
+          scrapedPrice = parsedInt.toString();
+        }
+      }
     }
 
     console.log(`[Scraper] Baseline reviews extracted from 1.4MB landing page: ${allExtractedReviews.length}`);
