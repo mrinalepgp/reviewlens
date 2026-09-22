@@ -163,14 +163,31 @@ export async function analyzeUrlsAction(
 
       if (!scrapeResult.success) {
         console.error(`[Action] Scraping failed for ${url}: ${scrapeResult.error}`);
-        // NEVER save "Analysis Failed: ..." as a product name in the database
-        throw new Error(scrapeResult.error || `Unable to retrieve live listing data for ${url}. Please check the URL and try again.`);
+        // Graceful failure: add error summary without crashing the batch
+        summaries.push({
+          url,
+          platform: scrapeResult.marketplace || 'unknown',
+          title: `Analysis Failed`,
+          averageScore: 0,
+          riskAssessment: 'critical',
+          negativeThemes: [scrapeResult.error || 'Scraping failed'],
+          reviewsCount: 0
+        });
+        continue;
       }
 
       if (!scrapeResult.reviews || !scrapeResult.reviews.length) {
         console.warn(`[Action] No reviews collected for URL: ${url}`);
-        // NEVER save error placeholder titles in the database
-        throw new Error(`No reviews could be extracted for ${url}. The listing may have no reviews or the page structure has changed.`);
+        summaries.push({
+          url,
+          platform: scrapeResult.marketplace || 'unknown',
+          title: scrapeResult.productTitle || `No Reviews Found`,
+          averageScore: 0,
+          riskAssessment: 'warning',
+          negativeThemes: ['No reviews could be extracted'],
+          reviewsCount: 0
+        });
+        continue;
       }
 
       let reviews = scrapeResult.reviews;

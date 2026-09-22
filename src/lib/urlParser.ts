@@ -79,10 +79,14 @@ function buildCleanFlipkartUrl(raw: string): string {
     const u = new URL(raw);
     // Normalise dl.flipkart.com → www.flipkart.com
     u.hostname = 'www.flipkart.com';
-    // Keep only path + essential params
+    // Keep only path + essential params (pid, lid, marketplace)
     const pid = u.searchParams.get('pid');
+    const lid = u.searchParams.get('lid');
+    const marketplace = u.searchParams.get('marketplace');
     const cleanParams = new URLSearchParams();
     if (pid) cleanParams.set('pid', pid);
+    if (lid) cleanParams.set('lid', lid);
+    if (marketplace) cleanParams.set('marketplace', marketplace);
     u.search = cleanParams.toString();
     return u.toString();
   } catch {

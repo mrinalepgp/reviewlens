@@ -271,7 +271,10 @@ export const flipkartCardSelectors = [
   'div._27M-vq',
   'div.EKF0PI',
   'div.ZmyHeo',
-  'div[data-review-id]'
+  'div[data-review-id]',
+  'div.row._3wYsGX',
+  'div.col._2wzgFH._3MNSXE',
+  'div._1YokD2._3Mn585'
 ];
 
 /**
@@ -384,7 +387,7 @@ export async function extractViaGeminiSelfHealing(rawHtmlOrText: string, marketp
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       },
     });
 
@@ -402,9 +405,15 @@ Rules:
 - Extract the REAL product title, not page headers or navigation text.
 - Extract the DISCOUNTED/SELLING price in INR (e.g. 499, not 0). If not found, estimate or use 0.
 - Extract the average rating (1.0 to 5.0).
-- Extract ALL customer reviews visible in the text with their star rating and date.
+- Extract EVERY customer review visible in the text. Look exhaustively for:
+  * Star ratings (1-5, ★) followed by review text
+  * Sections titled "Ratings & Reviews", "Customer Reviews", "All Reviews"
+  * Text blocks between review separators (---, review cards, rating badges)
+  * Short reviews (even 1-2 sentences count) and "READ MORE" truncated reviews
+  * Reviewer names, dates, and "Verified Purchase" / "Certified Buyer" markers
+- Include even partial or truncated review text. Every review matters.
 - If a review has no explicit rating, infer from sentiment (negative=1-2, neutral=3, positive=4-5).
-- Return an empty reviews array if no reviews are found.
+- Return an empty reviews array ONLY if there are truly zero reviews in the text.
 
 Page text:
 """
@@ -710,6 +719,7 @@ export interface FlipkartNormalizedUrls {
   slug: string;
   itmId: string;
   pid: string;
+  lid: string;
   canonicalProductUrl: string;
   dedicatedReviewsUrl: string;
 }
@@ -725,6 +735,7 @@ export function normalizeFlipkartUrl(rawUrl: string): FlipkartNormalizedUrls {
   try {
     const urlObj = new URL(rawUrl.trim());
     const pid = urlObj.searchParams.get('pid') || '';
+    const lid = urlObj.searchParams.get('lid') || '';
     
     // Match itm ID from pathname (e.g. /p/itmea1db41c24707)
     const itmMatch = urlObj.pathname.match(/\/(?:p|product-reviews)\/(itm[a-zA-Z0-9]+)/);
@@ -738,16 +749,30 @@ export function normalizeFlipkartUrl(rawUrl: string): FlipkartNormalizedUrls {
       slug = urlObj.pathname.split('/product-reviews/')[0].replace(/^\//, '');
     }
 
-    const pidParam = pid ? `?pid=${encodeURIComponent(pid)}` : '';
-    const canonicalProductUrl = slug && itmId ? `https://www.flipkart.com/${slug}/p/${itmId}${pidParam}` : rawUrl;
-    const dedicatedReviewsUrl = slug && itmId ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}${pid ? `?pid=${encodeURIComponent(pid)}&page=1` : '?page=1'}` : `${rawUrl}&page=1`;
+    // Build query params preserving pid, lid, and marketplace
+    const canonicalParams = new URLSearchParams();
+    if (pid) canonicalParams.set('pid', pid);
+    if (lid) canonicalParams.set('lid', lid);
+    canonicalParams.set('marketplace', 'FLIPKART');
+    const canonicalQs = canonicalParams.toString() ? `?${canonicalParams.toString()}` : '';
 
-    return { slug, itmId, pid, canonicalProductUrl, dedicatedReviewsUrl };
+    const reviewParams = new URLSearchParams();
+    if (pid) reviewParams.set('pid', pid);
+    if (lid) reviewParams.set('lid', lid);
+    reviewParams.set('marketplace', 'FLIPKART');
+    reviewParams.set('page', '1');
+    const reviewQs = `?${reviewParams.toString()}`;
+
+    const canonicalProductUrl = slug && itmId ? `https://www.flipkart.com/${slug}/p/${itmId}${canonicalQs}` : rawUrl;
+    const dedicatedReviewsUrl = slug && itmId ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}${reviewQs}` : `${rawUrl}&page=1`;
+
+    return { slug, itmId, pid, lid, canonicalProductUrl, dedicatedReviewsUrl };
   } catch {
     return {
       slug: 'product',
       itmId: 'itm',
       pid: '',
+      lid: '',
       canonicalProductUrl: rawUrl,
       dedicatedReviewsUrl: rawUrl
     };
@@ -760,10 +785,11 @@ export function normalizeFlipkartUrl(rawUrl: string): FlipkartNormalizedUrls {
  * https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${page}
  * Flipkart REJECTS slug-less review URLs with 301 redirects (returning 252 or 1780 byte payloads).
  */
-export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number): string[] {
+export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number, overrideLid?: string): string[] {
   try {
     const urlObj = new URL(targetUrl);
-    const pid = urlObj.searchParams.get('pid');
+    const pid = urlObj.searchParams.get('pid') || '';
+    const lid = overrideLid || urlObj.searchParams.get('lid') || '';
     
     // Extract itmId from pathname (e.g. /p/itmea1db41c24707)
     const itmMatch = urlObj.pathname.match(/\/p\/(itm[a-zA-Z0-9]+)/) || urlObj.pathname.match(/\/(?:p|product-reviews)\/(itm[a-zA-Z0-9]+)/);
@@ -781,11 +807,18 @@ export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number)
     const urls: string[] = [];
 
     for (let p = 1; p <= pagesNeeded; p++) {
-      if (slug && itmId && pid) {
-        // MUST INCLUDE SLUG TO PREVENT FLIPKART 301 REDIRECT
-        urls.push(`https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${p}`);
+      if (slug && itmId) {
+        // Build full review URL with slug + all required params to prevent 301 redirect
+        const params = new URLSearchParams();
+        if (pid) params.set('pid', pid);
+        if (lid) params.set('lid', lid);
+        params.set('marketplace', 'FLIPKART');
+        params.set('page', String(p));
+        urls.push(`https://www.flipkart.com/${slug}/product-reviews/${itmId}?${params.toString()}`);
       } else {
-        urls.push(`${targetUrl}&page=${p}`);
+        // Fallback: append page to original URL
+        const sep = targetUrl.includes('?') ? '&' : '?';
+        urls.push(`${targetUrl}${sep}page=${p}`);
       }
     }
     return urls;
@@ -796,8 +829,10 @@ export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number)
 
 /**
  * Universal Cheerio Review Parser across Flipkart Product and Review Pages
- * Utilizes the enterprise flipkartCardSelectors array:
- * ['div._2wzgFH', 'div.cPHDOP div._1AtVbE', 'div.col-12-12 > div._16PBlm', 'div._27M-vq', 'div.EKF0PI', 'div.ZmyHeo', 'div[data-review-id]']
+ * 
+ * TWO-PASS STRATEGY:
+ * Pass 1: Legacy class-based selectors (div._2wzgFH, div.ZmyHeo, etc.)
+ * Pass 2: Structural CSS-in-JS parser for React Native Web (finds rating badges → walks up to card)
  */
 export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
   rating: number;
@@ -814,6 +849,7 @@ export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
     date?: string;
   }> = [];
 
+  // ── PASS 1: Legacy class-based selectors ──────────────────────
   let reviewCards = $(flipkartCardSelectors.join(', '));
   if (reviewCards.length === 0) {
     const stars = $('div.XQDdHH, div._3LWZlK');
@@ -846,8 +882,112 @@ export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
     }
   });
 
+  if (reviews.length > 0) {
+    console.log(`[Cheerio] Pass 1 (legacy selectors): found ${reviews.length} reviews`);
+    return reviews;
+  }
+
+  // ── PASS 2: Structural CSS-in-JS parser for React Native Web ──
+  // Flipkart now uses atomic classes like css-g5y9jx, css-146c3p1, r-1h0z5md etc.
+  // Strategy: Find rating badges (a div containing just "1"-"5" near a "★" sibling),
+  // then walk up 3-5 levels to the review card container and extract all text.
+  console.log('[Cheerio] Pass 1 found 0 reviews. Attempting structural CSS-in-JS pass...');
+
+  const seenTexts = new Set<string>();
+
+  // Find all ★ characters in the page — these are either rating-distribution bars or individual review badges
+  $('div').each((_, starEl) => {
+    const starText = $(starEl).clone().children().remove().end().text().trim();
+    // We need a div whose own text is just "★" or that contains a sibling with a single digit
+    if (starText !== '★') return;
+
+    // Look for a sibling or adjacent element with a single digit 1-5 (the rating number)
+    const parent = $(starEl).parent();
+    if (!parent.length) return;
+
+    let ratingNum = 0;
+    parent.children().each((_, sib) => {
+      const sibText = $(sib).clone().children().remove().end().text().trim();
+      if (/^[1-5]$/.test(sibText) && !ratingNum) {
+        ratingNum = parseInt(sibText, 10);
+      }
+    });
+
+    if (!ratingNum) return;
+
+    // Distinguish individual review ratings from the rating-distribution histogram
+    // Histogram bars have count numbers like "5,128" nearby; individual reviews don't
+    const parentText = parent.parent().text().trim();
+    // If the text near this rating contains a large comma-separated number, it's a histogram bar
+    if (/\d{1,3},\d{3}/.test(parentText.slice(0, 100))) return;
+
+    // Walk up to the review card container (typically 3-6 levels up)
+    // The review card is usually the container that has both the rating AND review text
+    let cardEl = parent;
+    for (let i = 0; i < 6; i++) {
+      const p = cardEl.parent();
+      if (!p.length || p.is('body') || p.is('html')) break;
+
+      // Check if this container has substantial text (> 30 chars beyond the rating)
+      const containerText = p.text().replace(/[★\s]/g, '').trim();
+      if (containerText.length > 50) {
+        // Check if this container has siblings that are also review cards
+        // (a sign we've found the right level)
+        const siblings = p.parent().children();
+        let siblingRatingCount = 0;
+        siblings.each((_, sib) => {
+          const sibContent = $(sib).text().trim();
+          if (/^[1-5]\s*★/.test(sibContent) || /[1-5]\s*★/.test(sibContent.slice(0, 10))) {
+            siblingRatingCount++;
+          }
+        });
+
+        if (siblingRatingCount >= 2 || containerText.length > 80) {
+          cardEl = p;
+          break;
+        }
+      }
+      cardEl = p;
+    }
+
+    // Extract review text from the card container
+    const fullCardText = cardEl.text().replace(/\s+/g, ' ').trim();
+
+    // Strip out the rating badge text (e.g. "5 ★") from the beginning
+    let reviewBody = fullCardText.replace(/^[1-5]\s*★\s*/, '').trim();
+
+    // Also strip "READ MORE" suffix
+    reviewBody = reviewBody.replace(/\s*READ MORE\s*$/i, '').trim();
+
+    // Skip if too short or is a duplicate
+    if (reviewBody.length < 15) return;
+    const dedupeKey = reviewBody.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 60);
+    if (seenTexts.has(dedupeKey)) return;
+    seenTexts.add(dedupeKey);
+
+    // Try to extract author name (often a short text segment with specific patterns)
+    let author = 'Flipkart Customer';
+    let date = '';
+
+    // Look for month-year patterns in the text (e.g. "Jun, 2025" or "3 months ago")
+    const dateMatch = reviewBody.match(/(\w{3},?\s*\d{4}|\d+\s+(?:days?|months?|years?)\s+ago)/i);
+    if (dateMatch) {
+      date = dateMatch[1];
+    }
+
+    reviews.push({
+      rating: ratingNum,
+      title: 'Verified Review',
+      text: reviewBody,
+      author,
+      date
+    });
+  });
+
+  console.log(`[Cheerio] Pass 2 (structural CSS-in-JS): found ${reviews.length} reviews`);
   return reviews;
 }
+
 
 export function sanitizeUrl(url: string, marketplace: Marketplace): string {
   try {
@@ -1041,7 +1181,7 @@ export async function scrapeFlipkartReviews(
   const allExtractedReviews: ReviewPayload[] = [];
   let debugHtmlSnapshot = '';
 
-  const { slug, itmId, pid, canonicalProductUrl } = normalizeFlipkartUrl(targetUrl);
+  const { slug, itmId, pid, lid, canonicalProductUrl } = normalizeFlipkartUrl(targetUrl);
 
   // ── Step 1: Fetch Canonical Product Page (1.4MB) ────────────────
   let prodHtml = '';
@@ -1174,7 +1314,7 @@ export async function scrapeFlipkartReviews(
   }
 
   // Generate slug-preserved review URLs
-  const paginationUrls = getFlipkartReviewUrls(targetUrl, targetReviewLimit);
+  const paginationUrls = getFlipkartReviewUrls(targetUrl, targetReviewLimit, lid);
   console.log(`[Scraper] Generated ${paginationUrls.length} slug-preserved review URLs for Flipkart`);
 
   const BATCH_SIZE = 4;
@@ -1198,9 +1338,17 @@ export async function scrapeFlipkartReviews(
 
     const batchPromises = batchPages.map(async (p) => {
       // Must use slug-preserved URL to avoid Flipkart 301 redirect
-      const pageUrl = paginationUrls[p - 1] || (slug && itmId && pid
-        ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}?pid=${pid}&page=${p}`
-        : `${targetUrl}&page=${p}`);
+      let pageUrl = paginationUrls[p - 1];
+      if (!pageUrl) {
+        const fbParams = new URLSearchParams();
+        if (pid) fbParams.set('pid', pid);
+        if (lid) fbParams.set('lid', lid);
+        fbParams.set('marketplace', 'FLIPKART');
+        fbParams.set('page', String(p));
+        pageUrl = slug && itmId
+          ? `https://www.flipkart.com/${slug}/product-reviews/${itmId}?${fbParams.toString()}`
+          : `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}page=${p}`;
+      }
 
       const pageStart = Date.now();
       let revHtml = '';
