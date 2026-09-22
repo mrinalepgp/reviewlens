@@ -286,16 +286,15 @@ export async function analyzeUrlsAction(
         const capitalProtected = safeIntelligenceData.executiveScorecard?.estimatedCapitalProtected || 134850;
         const clusters = safeIntelligenceData.defectTaxonomy || [];
 
-        // 1. Explicitly await insert into 'analyses' table in Supabase bound to user!.id
+        // 1. Database insert with schema-resilient sanitization
         try {
-          const insertPayload: any = {
+          let insertPayload: any = {
             user_id: user!.id,
             product_url: url,
             platform: scrapeResult.marketplace,
             product_name: productName,
             product_title: productName,
             category: scrapeResult.category || "General",
-            average_rating: averageScore,
             risk_status: riskAssessment,
             return_risk_score: riskScore,
             top_defect: topDefect,
@@ -306,18 +305,43 @@ export async function analyzeUrlsAction(
             created_at: new Date().toISOString()
           };
 
-          const { data: analysisRecord, error: analysisError } = await supabase
-            .from('analyses')
-            .insert([insertPayload])
-            .select()
-            .single();
+          let analysisRecord = null;
+          let retryCount = 0;
 
-          if (analysisError) {
-            console.error(
-              "[Database] Primary insert error for 'analyses' table:",
-              JSON.stringify({ code: analysisError.code, message: analysisError.message, details: analysisError.details, hint: analysisError.hint })
-            );
-            // Fallback: minimal payload in case schema drift caused the full insert to fail
+          // Increase retry limit to 20 to handle severely stale schema caches (PGRST204)
+          // where multiple columns need to be iteratively stripped.
+          while (retryCount < 20) {
+            const { data, error } = await supabase
+              .from('analyses')
+              .insert(insertPayload)
+              .select()
+              .single();
+
+            if (error) {
+              if (error.code === 'PGRST204') {
+                const match = error.message.match(/'([^']+)'/);
+                if (match && match[1]) {
+                  const badCol = match[1];
+                  console.warn(`[Database] Schema Sanitizer: Column '${badCol}' missing in DB schema. Stripping from payload and retrying...`);
+                  delete insertPayload[badCol];
+                  retryCount++;
+                  continue;
+                }
+              }
+              console.error(
+                `[Database] Insert error for 'analyses' table on retry ${retryCount}:`,
+                JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint })
+              );
+              break; // Not a schema error we can auto-fix, or we failed to parse the column name
+            }
+            
+            analysisRecord = data;
+            break; // Success
+          }
+
+          if (!analysisRecord?.id) {
+            // Fallback: strictly minimal payload if dynamic sanitization failed
+            console.log(`[Database] Falling back to strictly minimal payload...`);
             const { data: fallbackRecord, error: fallbackError } = await supabase
               .from('analyses')
               .insert({
@@ -325,23 +349,20 @@ export async function analyzeUrlsAction(
                 product_url: url,
                 platform: scrapeResult.marketplace,
                 product_name: productName,
-                average_rating: averageScore,
                 risk_status: riskAssessment,
                 intelligence_data: safeIntelligenceData,
                 created_at: new Date().toISOString()
               })
               .select('id')
               .single();
+              
             if (fallbackRecord?.id) {
               insertedId = fallbackRecord.id;
               console.log(`[Database] Fallback committed analysis record to 'analyses': ${fallbackRecord.id}`);
             } else if (fallbackError) {
-              console.error(
-                "[Database] Fallback insert also failed:",
-                JSON.stringify({ code: fallbackError.code, message: fallbackError.message, details: fallbackError.details, hint: fallbackError.hint })
-              );
+              console.error("[Database] Fallback insert also failed:", JSON.stringify({ code: fallbackError.code, message: fallbackError.message }));
             }
-          } else if (analysisRecord?.id) {
+          } else {
             insertedId = analysisRecord.id;
             console.log(`[Database] Successfully committed analysis record to 'analyses' table: ${analysisRecord.id}`);
 

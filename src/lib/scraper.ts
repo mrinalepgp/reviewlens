@@ -1175,7 +1175,7 @@ export async function scrapeFlipkartReviews(
   reviews: ReviewPayload[];
   debugHtmlSnapshot?: string;
 }> {
-  const SCRAPE_DEADLINE_MS = 40000;
+  const SCRAPE_DEADLINE_MS = 15000;
   let scrapedTitle = '';
   let scrapedPrice = '';
   const allExtractedReviews: ReviewPayload[] = [];
@@ -1324,7 +1324,12 @@ export async function scrapeFlipkartReviews(
   while (allExtractedReviews.length < targetReviewLimit && currentBatchStartPage <= maxPages) {
     const elapsed = Date.now() - scrapeStartTime;
     if (elapsed >= SCRAPE_DEADLINE_MS) {
-      console.warn(`[Scraper] 40s safety cutoff reached (${elapsed}ms elapsed). Proceeding with ${allExtractedReviews.length} collected reviews.`);
+      console.warn(`[Scraper] 15s safety cutoff reached (${elapsed}ms elapsed). Proceeding with ${allExtractedReviews.length} collected reviews.`);
+      break;
+    }
+
+    if (allExtractedReviews.length >= 10) {
+      console.log(`[Scraper] Fast-path: Reached 10+ reviews (${allExtractedReviews.length}). Short-circuiting pagination to optimize latency.`);
       break;
     }
 
