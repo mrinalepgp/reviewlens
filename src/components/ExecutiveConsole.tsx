@@ -83,7 +83,7 @@ DATE GENERATED: ${new Date().toLocaleDateString('en-IN')}
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Factory_QA_Mandate_${product.title.slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
+    link.download = `Factory_QA_Mandate_${(product.title || 'Unknown').slice(0, 20).replace(/[^a-zA-Z0-9]/g, '_')}.txt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -747,7 +747,7 @@ Seller Central Admin`;
                           </p>
 
                           <div className="flex items-center justify-between text-[10px] text-neutral-500 mt-1 font-mono">
-                            <span>Platform: {product.platform.toUpperCase()}</span>
+                            <span>Platform: {(product.platform || 'unknown').toUpperCase()}</span>
                             <span>{rev.date || "Verified Purchase Audit"}</span>
                           </div>
                         </div>

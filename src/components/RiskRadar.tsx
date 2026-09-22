@@ -71,8 +71,8 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
           rootCauseDiagnostic: defect.rootCauseDiagnostic || defect.description || `Root cause diagnostic for ${defect.title || 'defect'} in batch production.`,
           factoryFixAction: defect.factoryFixAction || `Factory Action: Inspect raw material specs and reinforce wall thickness for ${defect.title || 'defect'}.`,
           listingGapAlert: defect.listingGapAlert || `Listing Recommendation: Update catalog size & spec guide.`,
-          productTitle: activeProduct.title,
-          platform: activeProduct.platform,
+          productTitle: activeProduct.title || 'Unknown Product',
+          platform: activeProduct.platform || 'unknown',
           colorClass,
           glowColor,
           productRef: activeProduct
@@ -103,7 +103,7 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
   }
 
   const handleCopyWhatsAppMemo = (bubble: DefectBubbleData) => {
-    const text = `🚨 *REVIEWLENS MARGIN DEFENSE - FACTORY QUALITY MEMO* 🚨\n\n📌 *Product:* ${bubble.productTitle} (${bubble.platform.toUpperCase()})\n⚠️ *Defect Cluster:* ${bubble.title} (${bubble.sharePercentage}% Impact - ${bubble.severity.toUpperCase()} SEVERITY)\n\n🔍 *Root Cause Diagnostic:* ${bubble.rootCauseDiagnostic}\n\n🛠️ *REQUIRED FACTORY ACTION:* ${bubble.factoryFixAction}\n\n💡 *Catalog Fix Alert:* ${bubble.listingGapAlert}\n\n_Generated via ReviewLens Intelligence Engine_`;
+    const text = `🚨 *REVIEWLENS MARGIN DEFENSE - FACTORY QUALITY MEMO* 🚨\n\n📌 *Product:* ${bubble.productTitle} (${(bubble.platform || 'unknown').toUpperCase()})\n⚠️ *Defect Cluster:* ${bubble.title} (${bubble.sharePercentage}% Impact - ${(bubble.severity || '').toUpperCase()} SEVERITY)\n\n🔍 *Root Cause Diagnostic:* ${bubble.rootCauseDiagnostic}\n\n🛠️ *REQUIRED FACTORY ACTION:* ${bubble.factoryFixAction}\n\n💡 *Catalog Fix Alert:* ${bubble.listingGapAlert}\n\n_Generated via ReviewLens Intelligence Engine_`;
     navigator.clipboard.writeText(text);
     setCopiedMemo(true);
     setTimeout(() => setCopiedMemo(false), 3000);
@@ -118,7 +118,7 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
             <h2 className="text-xs font-bold text-white uppercase tracking-wider">Defect Cluster Radar</h2>
             {activeProduct ? (
               <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider">
-                {activeProduct.platform.toUpperCase()}
+                {(activeProduct.platform || 'unknown').toUpperCase()}
               </span>
             ) : (
               <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 uppercase tracking-wider">
@@ -143,7 +143,7 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
             >
               {results.map((p, pIdx) => (
                 <option key={p.id || p.url || pIdx} value={p.id || p.url || ''} className="bg-neutral-900 text-white">
-                  {p.title.substring(0, 20)}{p.title.length > 20 ? '...' : ''} ({p.platform.toUpperCase()})
+                  {(p.title || 'Unknown').substring(0, 20)}{(p.title || '').length > 20 ? '...' : ''} ({(p.platform || 'unknown').toUpperCase()})
                 </option>
               ))}
             </select>

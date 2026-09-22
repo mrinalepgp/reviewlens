@@ -285,8 +285,8 @@ function HistoricalTable({
 
   const marketplaceFiltered = marketplaceFilter === 'all' ? data : data.filter(item => item.platform === marketplaceFilter);
   const filteredData = marketplaceFiltered.filter(item =>
-    item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.platform.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.title || 'Unknown').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.platform || 'Unknown').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.intelligence?.category || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -1445,7 +1445,7 @@ export default function Dashboard() {
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     <h3 className="text-xs font-bold text-white uppercase tracking-wider">Vernacular Live Feed</h3>
                     <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 uppercase">
-                      {activeProduct.platform.toUpperCase()}
+                      {(activeProduct.platform || 'unknown').toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-1.5 scrollbar-thin scrollbar-thumb-white/10">
