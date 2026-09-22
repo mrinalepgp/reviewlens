@@ -990,18 +990,28 @@ export default function Dashboard() {
                 intel.executiveScorecard.estimatedCapitalProtected = p.capital_protected;
               if (p.top_defect != null && intel.executiveScorecard.primaryRiskDriver == null)
                 intel.executiveScorecard.primaryRiskDriver = p.top_defect;
+              const extractedPrice = p.price || p.product_price || intel.price || p.margin_bleed_range || p.shield_radar?.price || p.competitor_benchmarks?.price || '';
+              const priceStr = typeof extractedPrice === 'number' ? `₹${extractedPrice}` : String(extractedPrice || '');
+              if (priceStr && !intel.price) intel.price = priceStr;
+              if (priceStr && !intel.executiveScorecard.price) intel.executiveScorecard.price = priceStr;
+
+              const rawReviews = p.raw_reviews || intel.raw_reviews || intel.reviews || p.shield_radar?.raw_reviews || [];
+              if (!intel.raw_reviews) intel.raw_reviews = rawReviews;
+              if (!intel.reviews) intel.reviews = rawReviews;
+
               return {
                 id: p.id,
-                url: p.product_url || p.url,
-                platform: p.platform,
-                title: p.product_name || p.title || p.product_title,
-                price: p.price || intel.price,
+                url: p.product_url || p.url || '',
+                platform: p.marketplace || p.platform || 'flipkart',
+                title: p.product_name || p.title || p.product_title || 'Analyzed Product',
+                price: priceStr,
                 category: p.category,
                 averageScore: p.average_rating || p.averageScore || 4.0,
                 riskAssessment: p.risk_status || p.riskAssessment || 'safe',
                 negativeThemes: intel?.executiveScorecard?.primaryRiskDriver
                   ? [intel.executiveScorecard.primaryRiskDriver] : [],
-                raw_reviews: p.raw_reviews || intel.raw_reviews || intel.reviews || [],
+                raw_reviews: rawReviews,
+                reviewsCount: rawReviews.length,
                 intelligence: intel,
               };
             });

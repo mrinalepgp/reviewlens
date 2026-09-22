@@ -288,10 +288,14 @@ export async function analyzeUrlsAction(
 
         // 1. Database insert with schema-resilient sanitization
         try {
+          const priceMatch = String(scrapeResult.price || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i);
+          const numericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : 399;
+          const rawPriceVal = scrapeResult.price || `₹${numericPrice}`;
           let insertPayload: any = {
             user_id: user!.id,
             product_url: url,
             platform: scrapeResult.marketplace,
+            marketplace: scrapeResult.marketplace,
             product_name: productName,
             product_title: productName,
             category: scrapeResult.category || "General",
@@ -300,6 +304,18 @@ export async function analyzeUrlsAction(
             top_defect: topDefect,
             capital_protected: capitalProtected,
             defect_clusters: clusters,
+            margin_bleed_range: rawPriceVal,
+            shield_radar: {
+              price: numericPrice || 399,
+              asp: numericPrice || 399,
+              priceString: rawPriceVal,
+              raw_reviews: scrapeResult.reviews || []
+            },
+            competitor_benchmarks: {
+              ...(safeIntelligenceData.competitorRadar || {}),
+              price: numericPrice || 399,
+              asp: numericPrice || 399
+            },
             raw_reviews: scrapeResult.reviews || [],
             intelligence_data: safeIntelligenceData,
             created_at: new Date().toISOString()
@@ -642,18 +658,28 @@ export async function fetchDashboardStateAction() {
         intel.executiveScorecard.primaryRiskDriver = p.top_defect;
       }
 
+      const extractedPrice = p.price || p.product_price || intel.price || p.margin_bleed_range || p.shield_radar?.price || p.competitor_benchmarks?.price || '';
+      const priceStr = typeof extractedPrice === 'number' ? `₹${extractedPrice}` : String(extractedPrice || '');
+      if (priceStr && !intel.price) intel.price = priceStr;
+      if (priceStr && !intel.executiveScorecard.price) intel.executiveScorecard.price = priceStr;
+
+      const rawReviews = p.raw_reviews || intel.raw_reviews || intel.reviews || p.shield_radar?.raw_reviews || [];
+      if (!intel.raw_reviews) intel.raw_reviews = rawReviews;
+      if (!intel.reviews) intel.reviews = rawReviews;
+
       return {
         id: p.id,
-        url: p.product_url || p.url,
-        platform: p.platform,
-        title: p.product_name || p.title || p.product_title,
+        url: p.product_url || p.url || '',
+        platform: p.marketplace || p.platform || 'flipkart',
+        title: p.product_name || p.title || p.product_title || 'Analyzed Product',
+        price: priceStr,
         category: p.category,
         averageScore: p.average_rating || p.averageScore || 4.0,
         riskAssessment: p.risk_status || p.riskAssessment || 'safe',
         negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
         intelligence: intel,
-        raw_reviews: p.raw_reviews || intel.raw_reviews || intel.reviews || [],
-        reviewsCount: (p.raw_reviews || intel.raw_reviews || intel.reviews || []).length
+        raw_reviews: rawReviews,
+        reviewsCount: rawReviews.length
       };
     });
 

@@ -6,6 +6,36 @@ import { AnalyzedProductSummary } from '@/app/actions';
 import { sanitizeCustomerQuote } from '@/lib/analyzer';
 import { deriveCategoryPrice } from '@/lib/scraper';
 
+/**
+ * Canonical data transformer for Executive Console Modal.
+ * Extracts accurate numerical price (e.g. ₹399 -> 399) and reviews array.
+ */
+export function extractModalPriceAndReviews(product: any): {
+  extractedPrice: number;
+  reviews: Array<any>;
+} {
+  if (!product) return { extractedPrice: 0, reviews: [] };
+  const intelligence = product.intelligence || {};
+  const rawPriceStr = product.price || product.product_price || product.asp || 
+                      product.margin_bleed_range || product.shield_radar?.price || 
+                      product.shield_radar?.asp || product.competitor_benchmarks?.price || 
+                      product.competitor_benchmarks?.asp || intelligence.price || 
+                      intelligence.executiveScorecard?.price || "";
+  
+  const priceMatch = String(rawPriceStr).match(/(?:₹|Rs\.?)\s*([0-9,]+)/i) || String(rawPriceStr).match(/([0-9,]+)/);
+  const parsedFromStr = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
+  const numPrice = parsedFromStr || (typeof product.price === 'number' ? product.price : 0) || 0;
+  const defaultCategoryPrice = deriveCategoryPrice(product.title || product.product_title || product.product_name || '', intelligence.category || product.category || '');
+  const extractedPrice = numPrice > 0 ? numPrice : defaultCategoryPrice;
+
+  const rawList = product.raw_reviews || product.reviews || 
+                  intelligence.raw_reviews || intelligence.reviews || 
+                  product.shield_radar?.raw_reviews || [];
+  const reviews = Array.isArray(rawList) ? rawList : [];
+
+  return { extractedPrice, reviews };
+}
+
 export default function ExecutiveConsole({
   product,
   onClose,
@@ -25,27 +55,19 @@ export default function ExecutiveConsole({
   
   const intelligence = product.intelligence || {};
   const titleLower = (product.title || "").toLowerCase();
-  const rawPriceStr = product.price || (product as any).price || (product as any).asp || intelligence.price || (product as any).product_price || intelligence.executiveScorecard?.price || "";
-  
-  // Extract clean numeric price (e.g. "₹1108" -> 1108)
-  const priceMatch = String(rawPriceStr).match(/(?:₹|Rs\.?)\s*([0-9,]+)/i) || String(rawPriceStr).match(/([0-9,]+)/);
-  const extractedNumericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : (Number(String(rawPriceStr).replace(/[^0-9]/g, '')) || 0);
-  const activeASP = extractedNumericPrice || (product as any).price || (product as any).asp || 0;
+  const { extractedPrice: modalPrice, reviews: extractedReviews } = extractModalPriceAndReviews(product);
+  const activeASP = modalPrice;
 
   // Calculator & Action Suite State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
-  const [asp, setAsp] = useState<number>(() => {
-    const parsed = typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0;
-    return parsed > 0 ? parsed : deriveCategoryPrice(product.title || '', (intelligence as any)?.category || '');
-  });
+  const [asp, setAsp] = useState<number>(modalPrice);
   const [returnCost, setReturnCost] = useState<number>(180);
   const [timeRange, setTimeRange] = useState<'ALL' | '30D' | '90D' | '1Y'>('ALL');
   const [showSafeHarborModal, setShowSafeHarborModal] = useState(false);
 
   useEffect(() => {
-    const numPrice = typeof activeASP === 'number' ? activeASP : parseInt(String(activeASP), 10) || 0;
-    setAsp(numPrice > 0 ? numPrice : deriveCategoryPrice(product.title || '', (intelligence as any)?.category || ''));
-  }, [product.id, product.price, (product as any).asp, activeASP]);
+    setAsp(modalPrice);
+  }, [product.id, modalPrice]);
 
   const handleExportPDF = () => {
     setIsExportingPDF(true);
@@ -127,13 +149,16 @@ Seller Central Admin`;
     customerRecoveryScript: "No data available."
   };
   
-  const rawReviewsList = (product as any).raw_reviews || intelligence.raw_reviews || intelligence.reviews || [];
+  const rawReviewsList = extractedReviews.length > 0 
+    ? extractedReviews 
+    : ((product as any).raw_reviews || (product as any).reviews || intelligence.raw_reviews || intelligence.reviews || []);
   const auditedReviewsCount = (product as any).reviewsCount || rawReviewsList.length;
 
   // Cohort Analytics Filtering
   const cohortFilteredReviews = rawReviewsList.filter((r: any) => {
     if (timeRange === 'ALL') return true;
     const rDate = new Date(r.date || Date.now()).getTime();
+    if (isNaN(rDate)) return true;
     const diffDays = (Date.now() - rDate) / (1000 * 60 * 60 * 24);
     if (timeRange === '30D') return diffDays <= 30;
     if (timeRange === '90D') return diffDays <= 90;
@@ -742,8 +767,12 @@ Seller Central Admin`;
                             </span>
                           </div>
 
-                          <p className="text-xs text-neutral-200 leading-relaxed font-sans mt-1">
-                            "{rev.content || rev.reviewText || rev.comment}"
+                          {rev.title && rev.title !== rev.content && rev.title !== rev.text && (
+                            <h5 className="text-xs font-bold text-white mt-1">{rev.title}</h5>
+                          )}
+
+                          <p className="text-xs text-neutral-200 leading-relaxed font-sans mt-0.5">
+                            "{rev.content || rev.reviewText || rev.text || rev.comment || rev.reviewBody || rev.body}"
                           </p>
 
                           <div className="flex items-center justify-between text-[10px] text-neutral-500 mt-1 font-mono">
