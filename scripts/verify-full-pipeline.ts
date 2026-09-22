@@ -37,7 +37,7 @@ async function main() {
 
   console.log('\n── 2. AI Analysis ──');
   const safeTitle = scrapeResult.productTitle || 'Unknown Product';
-  const intelligenceData = await executeMapReduceAnalysis(scrapeResult.reviews || [], 'flipkart', safeTitle);
+  const intelligenceData = await executeMapReduceAnalysis(scrapeResult.reviews || [], safeTitle, 'flipkart');
   console.log(`✓ AI Analysis completed. Risk Score: ${intelligenceData.executiveScorecard?.returnRiskScore}`);
 
   console.log('\n── 3. Database Insert ──');
