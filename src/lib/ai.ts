@@ -1,4 +1,13 @@
 import { GoogleGenerativeAI, Schema, SchemaType } from "@google/generative-ai";
+import { errorMessage } from './errors';
+// Type-only import: erased at compile time, so this does not create a runtime
+// cycle with scraper.ts, which imports cleanAndParseJSON from here.
+import type { EnterpriseIntelligence } from './scraper';
+
+/** The single method `generateContentSafe` needs from a Gemini model handle. */
+interface GenerativeModelLike {
+  generateContent(prompt: string): Promise<{ response: { text(): string } }>;
+}
 
 export type Sentiment = 'positive' | 'negative' | 'neutral';
 
@@ -40,14 +49,23 @@ export function cleanAndParseJSON(rawText: string) {
   return JSON.parse(clean);
 }
 
-async function generateContentSafe(model: any, prompt: string, retries = 3) {
+/** Pull an HTTP status off an SDK error shaped as `{status}` or `{response:{status}}`. */
+function httpStatusOf(err: unknown): number | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const direct = (err as { status?: unknown }).status;
+  if (typeof direct === 'number') return direct;
+  const nested = (err as { response?: { status?: unknown } }).response?.status;
+  return typeof nested === 'number' ? nested : undefined;
+}
+
+async function generateContentSafe(model: GenerativeModelLike, prompt: string, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       return await model.generateContent(prompt);
-    } catch (err: any) {
+    } catch (err) {
       if (i === retries - 1) throw err;
-      const status = err?.status || err?.response?.status;
-      if (status === 429 || status === 503 || err.message.includes('503') || err.message.includes('429')) {
+      const status = httpStatusOf(err);
+      if (status === 429 || status === 503 || errorMessage(err).includes('503') || errorMessage(err).includes('429')) {
         console.warn(`[AI] Gemini rate limit/busy (503/429), pausing 2s before attempt ${i + 2}...`);
         await new Promise((res) => setTimeout(res, 2000));
       } else {
@@ -55,6 +73,8 @@ async function generateContentSafe(model: any, prompt: string, retries = 3) {
       }
     }
   }
+  // Unreachable while retries >= 1, but keeps the return type non-nullable.
+  throw new Error(`[AI] Gemini call failed after ${retries} attempts`);
 }
 
 /**
@@ -97,8 +117,8 @@ export async function analyzeReviewSentiment(reviewText: string): Promise<Analys
     let parsedData: AnalysisResult;
     try {
       parsedData = cleanAndParseJSON(outputContent) as AnalysisResult;
-    } catch (err: any) {
-      console.error('[AI] JSON Parse Error in analyzeReviewSentiment:', err.message, 'Raw text:', outputContent);
+    } catch (err) {
+      console.error('[AI] JSON Parse Error in analyzeReviewSentiment:', errorMessage(err), 'Raw text:', outputContent);
       return { sentiment: 'neutral', detected_issue: 'analysis_error' };
     }
 
@@ -138,7 +158,10 @@ export interface HeadToHeadMatrix {
   marketStealStrategy: string[];
 }
 
-export async function generateHeadToHeadComparison(baseIntelligence: any, rivalIntelligence: any): Promise<HeadToHeadMatrix> {
+export async function generateHeadToHeadComparison(
+  baseIntelligence: EnterpriseIntelligence,
+  rivalIntelligence: EnterpriseIntelligence
+): Promise<HeadToHeadMatrix> {
   console.log(`[AI] Generating Head-to-Head Comparison Matrix...`);
 
   if (!process.env.GEMINI_API_KEY) {
@@ -208,8 +231,8 @@ ${JSON.stringify(rivalIntelligence, null, 2)}
     
     try {
       return cleanAndParseJSON(outputContent) as HeadToHeadMatrix;
-    } catch (parseError: any) {
-      console.error('[AI] JSON Parse Error in generateHeadToHeadComparison:', parseError.message, 'Raw text:', outputContent);
+    } catch (parseError) {
+      console.error('[AI] JSON Parse Error in generateHeadToHeadComparison:', errorMessage(parseError), 'Raw text:', outputContent);
       throw parseError; // Caught by outer try-catch for fallback
     }
   } catch (error) {
@@ -217,10 +240,10 @@ ${JSON.stringify(rivalIntelligence, null, 2)}
     // Fallback stub
     return {
       clashScorecard: {
-        ourRisk: baseIntelligence?.productSummary?.returnRiskScore || 0,
-        theirRisk: rivalIntelligence?.productSummary?.returnRiskScore || 0,
-        ourHealth: baseIntelligence?.productSummary?.listingHealthScore || 0,
-        theirHealth: rivalIntelligence?.productSummary?.listingHealthScore || 0,
+        ourRisk: baseIntelligence?.executiveScorecard?.returnRiskScore || 0,
+        theirRisk: rivalIntelligence?.executiveScorecard?.returnRiskScore || 0,
+        ourHealth: baseIntelligence?.executiveScorecard?.listingHealthScore || 0,
+        theirHealth: rivalIntelligence?.executiveScorecard?.listingHealthScore || 0,
         ourRating: 0,
         theirRating: 0
       },

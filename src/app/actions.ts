@@ -1,9 +1,13 @@
 "use server";
 
-import { fetchMarketplaceReviews, scrapeFlipkart, calculateAuditCreditCost, parseMetadataFromUrl } from "@/lib/scraper";
-import { analyzeReviewSentiment, generateHeadToHeadComparison } from "@/lib/ai";
-import { generateTemporalVarianceIntelligence } from "@/lib/gemini";
+import { fetchMarketplaceReviews } from "@/lib/scraper";
+import type { EnterpriseIntelligence, Marketplace } from "@/lib/scraper";
+import type { LooseReview, LooseDefect } from "@/lib/types";
+import { generateHeadToHeadComparison } from "@/lib/ai";
 import { createClient, getAuthenticatedUser } from "@/utils/supabase/server";
+import { hasRole } from "@/lib/auth/rbac";
+import { getPlan } from "@/lib/pricing";
+import { errorMessage } from "@/lib/errors";
 
 export interface AnalyzedProductSummary {
   id?: string;
@@ -14,8 +18,8 @@ export interface AnalyzedProductSummary {
   averageScore: number;
   riskAssessment: 'safe' | 'warning' | 'critical';
   negativeThemes: string[];
-  intelligence?: any;
-  raw_reviews?: any[];
+  intelligence?: EnterpriseIntelligence;
+  raw_reviews?: LooseReview[];
   reviewsCount?: number;
 }
 
@@ -24,6 +28,40 @@ export interface AnalyzeUrlsResponse {
   scrapedLive?: boolean;
   summaries: AnalyzedProductSummary[];
   error?: string;
+}
+
+/** A row of the `analyses` table as read back by the dashboard. */
+export interface AnalysisRow {
+  id?: string;
+  user_id?: string;
+  product_url?: string;
+  platform?: string;
+  marketplace?: string;
+  product_name?: string;
+  product_title?: string;
+  category?: string;
+  risk_status?: string;
+  return_risk_score?: number | null;
+  listing_health_score?: number | null;
+  top_defect?: string;
+  capital_protected?: number | null;
+  margin_bleed_range?: string | null;
+  price?: string | number | null;
+  product_price?: string | number | null;
+  average_rating?: number | null;
+  defect_clusters?: LooseDefect[];
+  raw_reviews?: LooseReview[];
+  vernacular_decoders?: unknown;
+  competitor_benchmarks?: Record<string, unknown>;
+  shield_radar?: Record<string, unknown>;
+  intelligence_data?: EnterpriseIntelligence;
+  intelligence?: EnterpriseIntelligence;
+  created_at?: string;
+  // Aliases present on rows written by earlier builds.
+  url?: string;
+  title?: string;
+  averageScore?: number;
+  riskAssessment?: 'safe' | 'warning' | 'critical';
 }
 
 export interface ReviewAnalysisRow {
@@ -75,14 +113,18 @@ export async function analyzeUrlsAction(
       // Best-effort cleanup
     }
 
-    const rawUser = await getAuthenticatedUser();
-    const user: any = rawUser || { id: 'test-user-id', email: 'test@example.com' };
+    // Server Actions are publicly reachable endpoints — an unauthenticated
+    // caller must be rejected, never handed a placeholder identity.
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return { success: false, summaries: [], error: 'Unauthorized. Please sign in to run an audit.' };
+    }
 
-    const userEmail = (user.email || '').toLowerCase();
-    const isAdmin = userEmail === 'reviewlens_admin@reviewlens.com' || user.devRole === 'admin';
-    const isFree = userEmail === 'reviewlens_free@reviewlens.com' || user.devRole === 'free' || !isAdmin;
+    const userEmail = user.email.toLowerCase();
+    const isAdmin = hasRole(user.role, 'org_admin');
+    const plan = getPlan(user.plan);
 
-    // ── Enforce 3 Product Links Limit for Free Tier ───────────────────────
+    // ── Enforce the plan's SKU quota ──────────────────────────────────────
     let existingCount = 0;
     try {
       const { count } = await supabase
@@ -94,28 +136,30 @@ export async function analyzeUrlsAction(
       existingCount = 0;
     }
 
-    if (isFree && (existingCount + urls.length > 3)) {
-      throw new Error(`Free tier limit reached: Free accounts are strictly limited to 3 product links total (currently using ${existingCount}/3). Please upgrade to Growth Seller for unlimited product links.`);
+    if (!isAdmin && plan.skuQuota != null && existingCount + urls.length > plan.skuQuota) {
+      throw new Error(
+        `${plan.name} plan limit reached: ${plan.skuQuota} tracked SKUs (currently using ${existingCount}). Upgrade to raise the quota.`
+      );
     }
 
     let { data: profile } = await supabase
       .from('user_profiles')
       .select('credits')
-      .eq('id', user!.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (!profile) {
-      console.log(`[Auto-Provision] User profile missing for ${user!.id}. Auto-provisioning profile...`);
-      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
-      const initialCredits = isAdmin ? 99999 : 3;
-      
+      console.log(`[Auto-Provision] User profile missing for ${user.id}. Auto-provisioning profile...`);
+      const initialCredits = isAdmin ? 99999 : plan.skuQuota ?? 999;
+
       const { data: newProfile } = await supabase
         .from('user_profiles')
         .insert({
-          id: user!.id,
+          id: user.id,
           credits: initialCredits,
-          full_name: fullName,
-          plan_tier: isAdmin ? 'Enterprise' : 'Free'
+          full_name: user.fullName,
+          email: user.email,
+          plan_tier: plan.name
         })
         .select('credits')
         .maybeSingle();
@@ -124,17 +168,17 @@ export async function analyzeUrlsAction(
 
       try {
         await supabase.from('sellers').insert({
-          id: user!.id,
-          full_name: fullName,
-          whatsapp_number: isAdmin ? '+910000000000' : '',
-          subscription_status: isAdmin ? 'enterprise' : 'free'
+          id: user.id,
+          full_name: user.fullName,
+          whatsapp_number: '',
+          subscription_status: plan.code
         });
       } catch {
         // ignore if already exists
       }
     }
 
-    const availableCredits = isAdmin ? 99999 : (profile?.credits ?? Math.max(0, 3 - existingCount));
+    const availableCredits = isAdmin ? 99999 : (profile?.credits ?? 0);
 
     if (availableCredits < urls.length && !isAdmin) {
       throw new Error(`Insufficient credits. You need ${urls.length} credits but have ${availableCredits}.`);
@@ -150,14 +194,14 @@ export async function analyzeUrlsAction(
       
       try {
         scrapeResult = await fetchMarketplaceReviews(url, options);
-      } catch (err: any) {
+      } catch (err) {
         console.error(`[Action] fetchMarketplaceReviews exception for ${url}:`, err);
         scrapeResult = {
           success: false,
-          marketplace: 'unknown' as any,
+          marketplace: 'unknown' as Marketplace,
           url,
           reviews: [],
-          error: err?.message || 'Scraping and review extraction failed.'
+          error: errorMessage(err) || 'Scraping and review extraction failed.'
         };
       }
 
@@ -191,21 +235,16 @@ export async function analyzeUrlsAction(
       }
 
       let reviews = scrapeResult.reviews;
-      // ── Enforce Free Tier 100 Reviews Cap ──────────────────────────────
-      if (isFree && reviews && reviews.length > 100) {
-        console.log(`[Free Tier Cap] Slicing reviews from ${reviews.length} to latest 100 for ${url}`);
-        reviews = reviews.slice(0, 100);
-      }
 
-      // ── Enforce Review Limit from UI (max 2000) ─────────────────────────
-      const MAX_REVIEW_CAP = 2000;
-      const reviewLimit = Math.min(options?.reviewLimit || MAX_REVIEW_CAP, MAX_REVIEW_CAP);
+      // ── Enforce the plan's review-depth cap ─────────────────────────────
+      // The UI may request fewer reviews than the plan allows, but never more.
+      const planCap = isAdmin ? 2000 : plan.reviewDepthCap;
+      const reviewLimit = Math.min(options?.reviewLimit || planCap, planCap);
       if (reviews && reviews.length > reviewLimit) {
-        console.log(`[Volume Cap] Slicing reviews from ${reviews.length} to ${reviewLimit} for ${url}`);
+        console.log(`[Volume Cap] Slicing reviews from ${reviews.length} to ${reviewLimit} for ${url} (${plan.name} plan)`);
         reviews = reviews.slice(0, reviewLimit);
       }
       let totalScore = 0;
-      let negativeCount = 0;
       const negativeThemes: Set<string> = new Set();
       const reviewAnalysisData = [];
 
@@ -213,7 +252,6 @@ export async function analyzeUrlsAction(
         totalScore += review.rating;
         const isNeg = review.rating <= 2;
         if (isNeg) {
-          negativeCount++;
           if (review.sentiment && review.sentiment !== 'OPTIMAL') {
             negativeThemes.add(review.sentiment);
           }
@@ -281,18 +319,22 @@ export async function analyzeUrlsAction(
 
         let insertedId: string | undefined = undefined;
 
-        const riskScore = safeIntelligenceData.executiveScorecard?.returnRiskScore || 28.5;
+        // Persist nulls rather than stand-in figures: a missing score must not
+        // be indistinguishable from a real one when it is read back.
+        const riskScore = safeIntelligenceData.executiveScorecard?.returnRiskScore ?? null;
         const topDefect = safeIntelligenceData.executiveScorecard?.primaryRiskDriver || "Defect Detected";
-        const capitalProtected = safeIntelligenceData.executiveScorecard?.estimatedCapitalProtected || 134850;
+        const capitalProtected = safeIntelligenceData.executiveScorecard?.estimatedCapitalProtected ?? null;
         const clusters = safeIntelligenceData.defectTaxonomy || [];
 
         // 1. Database insert with schema-resilient sanitization
         try {
           const priceMatch = String(scrapeResult.price || '').match(/(?:₹|Rs\.?)\s*([0-9,]+)/i);
-          const numericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : 399;
-          const rawPriceVal = scrapeResult.price || `₹${numericPrice}`;
-          let insertPayload: any = {
-            user_id: user!.id,
+          // Null when the live price could not be extracted — downstream renders
+          // an explicit "price unavailable" rather than a placeholder amount.
+          const numericPrice = priceMatch ? parseInt(priceMatch[1].replace(/,/g, ''), 10) : null;
+          const rawPriceVal = scrapeResult.price || (numericPrice != null ? `₹${numericPrice}` : null);
+          const insertPayload: Record<string, unknown> = {
+            user_id: user.id,
             product_url: url,
             platform: scrapeResult.marketplace,
             marketplace: scrapeResult.marketplace,
@@ -306,15 +348,15 @@ export async function analyzeUrlsAction(
             defect_clusters: clusters,
             margin_bleed_range: rawPriceVal,
             shield_radar: {
-              price: numericPrice || 399,
-              asp: numericPrice || 399,
+              price: numericPrice,
+              asp: numericPrice,
               priceString: rawPriceVal,
               raw_reviews: scrapeResult.reviews || []
             },
             competitor_benchmarks: {
               ...(safeIntelligenceData.competitorRadar || {}),
-              price: numericPrice || 399,
-              asp: numericPrice || 399
+              price: numericPrice,
+              asp: numericPrice
             },
             raw_reviews: scrapeResult.reviews || [],
             intelligence_data: safeIntelligenceData,
@@ -361,7 +403,7 @@ export async function analyzeUrlsAction(
             const { data: fallbackRecord, error: fallbackError } = await supabase
               .from('analyses')
               .insert({
-                user_id: user!.id,
+                user_id: user.id,
                 product_url: url,
                 platform: scrapeResult.marketplace,
                 product_name: productName,
@@ -389,7 +431,7 @@ export async function analyzeUrlsAction(
               .from('analyses')
               .select('id, created_at')
               .eq('id', analysisRecord.id)
-              .eq('user_id', user!.id)
+              .eq('user_id', user.id)
               .single();
 
             if (verifyError || !verified?.id) {
@@ -407,10 +449,10 @@ export async function analyzeUrlsAction(
 
         // 2. Secondary persistence into 'tracked_products' table
         try {
-          const { data: productData, error: productError } = await supabase
+          const { data: productData } = await supabase
             .from('tracked_products')
             .insert({
-              user_id: user!.id,
+              user_id: user.id,
               platform: scrapeResult.marketplace,
               product_url: url,
               product_name: productName,
@@ -429,7 +471,7 @@ export async function analyzeUrlsAction(
             }));
             await supabase.from('review_analysis').insert(reviewsToInsert);
           }
-        } catch (e) {
+        } catch {
           // ignore secondary insert exception
         }
 
@@ -440,7 +482,7 @@ export async function analyzeUrlsAction(
         const { error: creditError } = await supabase
           .from('user_profiles')
           .update({ credits: currentCredits })
-          .eq('id', user!.id);
+          .eq('id', user.id);
         if (creditError) {
           console.error("[Database] Failed to deduct credit:", creditError.message);
         } else {
@@ -488,9 +530,20 @@ export async function analyzeUrlsAction(
 export async function fetchProductReviewsAction(productId: string) {
   try {
     const supabase = await createClient();
-    // We enforce that the user is logged in
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
     if (!user) throw new Error("Unauthorized");
+
+    // Confirm the caller owns this analysis before returning its reviews;
+    // filtering on product_id alone let any signed-in user read any SKU.
+    const { data: owned, error: ownershipError } = await supabase
+      .from('analyses')
+      .select('id')
+      .eq('id', productId)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (ownershipError) throw ownershipError;
+    if (!owned) throw new Error('Not found');
 
     const { data, error } = await supabase
       .from('review_analysis')
@@ -516,8 +569,15 @@ export async function fetchProductReviewsAction(productId: string) {
   }
 }
 
-export async function compareCompetitorAction(baseIntelligence: any, competitorUrl: string) {
+export async function compareCompetitorAction(baseIntelligence: EnterpriseIntelligence, competitorUrl: string) {
   try {
+    // Scraping + Gemini calls cost money on every invocation; this Server
+    // Action is a public endpoint, so it must authenticate before spending.
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized. Please sign in to run a comparison.' };
+    }
+
     console.log(`[Action] Initiating competitor comparison against: ${competitorUrl}`);
     
     // 1. Scrape competitor live page
@@ -546,47 +606,46 @@ export async function compareCompetitorAction(baseIntelligence: any, competitorU
 export async function fetchDashboardStateAction() {
   try {
     const supabase = await createClient();
-    const rawUser = await getAuthenticatedUser();
-    const user: any = rawUser || { id: 'test-user-id', email: 'test@example.com' };
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized. Please sign in.' };
+    }
 
-    const userEmail = (user.email || '').toLowerCase();
-    const isAdmin = userEmail === 'reviewlens_admin@reviewlens.com' || user.devRole === 'admin';
-    const isFree = userEmail === 'reviewlens_free@reviewlens.com' || user.devRole === 'free' || !isAdmin;
+    const isAdmin = hasRole(user.role, 'org_admin');
+    const plan = getPlan(user.plan);
 
     // Get Profile
     let { data: profile } = await supabase
       .from('user_profiles')
       .select('*')
-      .eq('id', user!.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (!profile) {
-      console.log(`[Auto-Provision] Dashboard state fetch: missing profile for ${user!.id}. Creating profile...`);
-      const fullName = user!.user_metadata?.full_name || user!.user_metadata?.name || user!.email?.split('@')[0] || (isAdmin ? 'Admin' : 'User');
-      const defaultCredits = isAdmin ? 99999 : 3;
-      const defaultPlan = isAdmin ? 'Enterprise' : 'Free';
+      console.log(`[Auto-Provision] Dashboard state fetch: missing profile for ${user.id}. Creating profile...`);
+      const defaultCredits = isAdmin ? 99999 : plan.skuQuota ?? 999;
       const { data: newProf } = await supabase
         .from('user_profiles')
-        .insert({ id: user!.id, credits: defaultCredits, full_name: fullName, plan_tier: defaultPlan })
+        .insert({ id: user.id, credits: defaultCredits, full_name: user.fullName, email: user.email, plan_tier: plan.name })
         .select('*')
         .maybeSingle();
-      profile = newProf || { id: user!.id, credits: defaultCredits, full_name: fullName, plan_tier: defaultPlan };
+      profile = newProf || { id: user.id, credits: defaultCredits, full_name: user.fullName, plan_tier: plan.name };
     }
 
     // Get Seller (for whatsapp)
-    let { data: seller } = await supabase
+    const { data: seller } = await supabase
       .from('sellers')
       .select('whatsapp_number')
-      .eq('id', user!.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     // Query 'analyses' table for current user_id
-    let fetchedProducts: any[] = [];
+    let fetchedProducts: AnalysisRow[] = [];
     try {
       const { data: analysesData, error: analysesError } = await supabase
         .from('analyses')
         .select('*')
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (analysesError) {
@@ -594,19 +653,19 @@ export async function fetchDashboardStateAction() {
       }
       if (!analysesError && analysesData && analysesData.length > 0) {
         fetchedProducts = analysesData;
-        console.log(`[Dashboard] Loaded ${analysesData.length} analyses records from DB for user ${user!.id}`);
+        console.log(`[Dashboard] Loaded ${analysesData.length} analyses records from DB for user ${user.id}`);
 
         // Background cleanup: remove broken entries with error-string product names
         const brokenIds = analysesData
-          .filter((a: any) => {
+          .filter((a: AnalysisRow) => {
             const name = (a.product_name || a.product_title || '').toLowerCase();
             return name.startsWith('analysis failed') || name.startsWith('incomplete data');
           })
-          .map((a: any) => a.id)
+          .map((a: AnalysisRow) => a.id)
           .filter(Boolean);
         if (brokenIds.length > 0) {
           console.log(`[DB Cleanup] Removing ${brokenIds.length} broken 'Analysis Failed' entries...`);
-          fetchedProducts = analysesData.filter((a: any) => !brokenIds.includes(a.id));
+          fetchedProducts = analysesData.filter((a: AnalysisRow) => !brokenIds.includes(a.id));
           // Fire-and-forget DB cleanup
           void supabase.from('analyses').delete().in('id', brokenIds).then(({ error }) => {
             if (error) console.error('[DB Cleanup] Delete error:', error.message);
@@ -623,7 +682,7 @@ export async function fetchDashboardStateAction() {
         const { data: trackedData } = await supabase
           .from('tracked_products')
           .select('*')
-          .eq('user_id', user!.id)
+          .eq('user_id', user.id)
           .order('id', { ascending: false });
         if (trackedData && trackedData.length > 0) {
           fetchedProducts = trackedData;
@@ -635,7 +694,7 @@ export async function fetchDashboardStateAction() {
 
     // Format historical data — reconstruct intelligence.executiveScorecard from DB columns
     // so KPI cards compute correctly after a page reload
-    const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: any) => {
+    const historicalData: AnalyzedProductSummary[] = fetchedProducts.map((p: AnalysisRow) => {
       const intel = p.intelligence_data || p.intelligence || {};
 
       // Merge defect_clusters into taxonomy if missing
@@ -663,7 +722,10 @@ export async function fetchDashboardStateAction() {
       if (priceStr && !intel.price) intel.price = priceStr;
       if (priceStr && !intel.executiveScorecard.price) intel.executiveScorecard.price = priceStr;
 
-      const rawReviews = p.raw_reviews || intel.raw_reviews || intel.reviews || p.shield_radar?.raw_reviews || [];
+      const shieldReviews = Array.isArray(p.shield_radar?.raw_reviews)
+        ? (p.shield_radar.raw_reviews as LooseReview[])
+        : undefined;
+      const rawReviews: LooseReview[] = p.raw_reviews || intel.raw_reviews || intel.reviews || shieldReviews || [];
       if (!intel.raw_reviews) intel.raw_reviews = rawReviews;
       if (!intel.reviews) intel.reviews = rawReviews;
 
@@ -675,7 +737,7 @@ export async function fetchDashboardStateAction() {
         price: priceStr,
         category: p.category,
         averageScore: p.average_rating || p.averageScore || 4.0,
-        riskAssessment: p.risk_status || p.riskAssessment || 'safe',
+        riskAssessment: (p.risk_status as AnalyzedProductSummary['riskAssessment']) || p.riskAssessment || 'safe',
         negativeThemes: intel?.executiveScorecard?.primaryRiskDriver ? [intel.executiveScorecard.primaryRiskDriver] : [],
         intelligence: intel,
         raw_reviews: rawReviews,
@@ -686,66 +748,66 @@ export async function fetchDashboardStateAction() {
     return {
       success: true,
       user: {
-        email: user!.email,
-        full_name: profile?.full_name || user!.user_metadata?.full_name || user!.user_metadata?.name || '',
+        email: user.email,
+        full_name: profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '',
         whatsapp_number: seller?.whatsapp_number || '',
-        company_name: user!.user_metadata?.company_name || '',
-        whatsapp_alerts_enabled: user!.user_metadata?.whatsapp_alerts_enabled || false,
-        providers: user!.app_metadata?.providers || [],
-        initials: user!.email ? user!.email.substring(0, 2).toUpperCase() : (isAdmin ? 'AD' : 'FR'),
-        credits: isAdmin ? 99999 : (profile?.credits ?? Math.max(0, 3 - fetchedProducts.length)),
-        plan: isAdmin ? 'Enterprise' : isFree ? 'Free' : (profile?.plan_tier ?? 'Hobby')
+        company_name: user.user_metadata?.company_name || '',
+        whatsapp_alerts_enabled: user.user_metadata?.whatsapp_alerts_enabled || false,
+        providers: user.app_metadata?.providers || [],
+        initials: user.email ? user.email.substring(0, 2).toUpperCase() : 'RL',
+        credits: isAdmin ? 99999 : (profile?.credits ?? 0),
+        plan: profile?.plan_tier ?? plan.name
       },
       historicalData
     };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[Action] Failed to fetch dashboard state:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 export async function deleteProductAction(productId: string) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
     if (!user) throw new Error("Unauthorized");
 
     // Delete from primary analyses table
-    await supabase.from('analyses').delete().eq('id', productId).eq('user_id', user!.id);
+    await supabase.from('analyses').delete().eq('id', productId).eq('user_id', user.id);
     // Also delete from legacy tracked_products
-    await supabase.from('tracked_products').delete().eq('id', productId).eq('user_id', user!.id);
+    await supabase.from('tracked_products').delete().eq('id', productId).eq('user_id', user.id);
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[Action] Failed to delete product:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 export async function clearAllHistoryAction() {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
     if (!user) throw new Error("Unauthorized");
 
     // Clear from both tables
-    await supabase.from('analyses').delete().eq('user_id', user!.id);
-    await supabase.from('tracked_products').delete().eq('user_id', user!.id);
+    await supabase.from('analyses').delete().eq('user_id', user.id);
+    await supabase.from('tracked_products').delete().eq('user_id', user.id);
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[Action] Failed to clear history:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 export async function updateUserProfileAction(fullName: string, whatsappNumber: string, companyName: string, whatsappAlertsEnabled: boolean, password?: string) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
     if (!user) throw new Error("Unauthorized");
 
-    const updatePayload: any = {
+    const updatePayload: Record<string, unknown> = {
       data: {
         company_name: companyName,
         whatsapp_alerts_enabled: whatsappAlertsEnabled
@@ -758,35 +820,35 @@ export async function updateUserProfileAction(fullName: string, whatsappNumber: 
     const { error: authErr } = await supabase.auth.updateUser(updatePayload);
     if (authErr) throw authErr;
 
-    const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user!.id);
+    const { error: profErr } = await supabase.from('user_profiles').update({ full_name: fullName }).eq('id', user.id);
     if (profErr) throw profErr;
 
     const { error: sellErr } = await supabase.from('sellers').update({ 
       full_name: fullName,
       whatsapp_number: whatsappNumber
-    }).eq('id', user!.id);
+    }).eq('id', user.id);
     if (sellErr) throw sellErr;
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[Action] Failed to update user profile:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: errorMessage(err) };
   }
 }
 
 export async function wipeUserAccountAction() {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
     if (!user) throw new Error("Unauthorized");
 
-    await supabase.from('tracked_products').delete().eq('user_id', user!.id);
-    await supabase.from('sellers').delete().eq('id', user!.id);
-    await supabase.from('user_profiles').delete().eq('id', user!.id);
+    await supabase.from('tracked_products').delete().eq('user_id', user.id);
+    await supabase.from('sellers').delete().eq('id', user.id);
+    await supabase.from('user_profiles').delete().eq('id', user.id);
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err) {
     console.error("[Action] Failed to wipe user account:", err);
-    return { success: false, error: err.message };
+    return { success: false, error: errorMessage(err) };
   }
 }

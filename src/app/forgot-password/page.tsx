@@ -10,7 +10,7 @@ const initialState = {
 }
 
 export default function ForgotPasswordPage() {
-  const [state, formAction, isPending] = useActionState(async (prevState: any, formData: FormData) => {
+  const [state, formAction, isPending] = useActionState(async (prevState: typeof initialState, formData: FormData) => {
     const res = await sendResetLink(formData)
     return res || { error: '' }
   }, initialState)
@@ -27,7 +27,7 @@ export default function ForgotPasswordPage() {
           Reset your password
         </h2>
         <p className="mt-2 text-center text-sm text-neutral-400">
-          Enter your email address and we'll send you a link to reset your password.
+          Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
       </div>
 
@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
               </div>
               <h3 className="text-lg font-medium text-white">Check your email</h3>
               <p className="text-sm text-neutral-400">
-                We've sent a password reset link to your email address.
+                We&apos;ve sent a password reset link to your email address.
               </p>
               <div className="pt-4">
                 <Link href="/login" className="text-sm font-medium text-indigo-400 hover:text-indigo-300">

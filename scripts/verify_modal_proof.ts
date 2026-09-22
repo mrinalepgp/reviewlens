@@ -20,6 +20,7 @@ for (const line of envContent.split('\n')) {
 
 import { extractModalPriceAndReviews } from '../src/components/ExecutiveConsole';
 import { extractFlipkartMetadataAndReviews } from '../src/lib/scraper';
+import type { LooseReview } from '../src/lib/types';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -32,7 +33,7 @@ async function verifyProof() {
 
   // Step A: Parse real Flipkart HTML to get genuine reviews & ₹399 price
   let genuinePrice = 399;
-  let genuineReviews: any[] = [];
+  const genuineReviews: LooseReview[] = [];
   
   const revHtmlPath = path.resolve(process.cwd(), 'temp_flipkart_reviews.html');
   const prodHtmlPath = path.resolve(process.cwd(), 'temp_flipkart.html');
@@ -83,7 +84,7 @@ async function verifyProof() {
   console.log(`[2. Supabase] Located latest analysis ID: ${latestRecord.id} (${latestRecord.product_title})`);
 
   // Step C: Update latest record in Supabase with verified price & genuine reviews
-  const updatePayload: any = {
+  const updatePayload: Record<string, unknown> = {
     marketplace: 'flipkart',
     margin_bleed_range: `₹${genuinePrice}`,
     shield_radar: {

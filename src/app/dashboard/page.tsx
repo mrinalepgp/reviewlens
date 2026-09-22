@@ -4,161 +4,20 @@ export const maxDuration = 120;
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { analyzeUrlsAction, compareCompetitorAction, AnalyzedProductSummary, fetchProductReviewsAction, ReviewAnalysisRow, fetchDashboardStateAction, deleteProductAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
+import { analyzeUrlsAction, AnalyzedProductSummary, fetchDashboardStateAction, deleteProductAction, updateUserProfileAction, wipeUserAccountAction } from '@/app/actions';
 import { createClient } from '@/utils/supabase/client';
-import Link from 'next/link';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import KPICards from '@/components/KPICards';
 import RiskRadar from '@/components/RiskRadar';
 import ExecutiveConsole from '@/components/ExecutiveConsole';
 import SmartIngestionModal from '@/components/SmartIngestionModal';
 import { sanitizeCustomerQuote } from '@/lib/analyzer';
+import { errorMessage } from '@/lib/errors';
 
 // --- Types ---
 type HealthStatus = 'safe' | 'warning' | 'critical';
 
 // --- Components ---
 
-function IngestionCard({
-  onAnalyze,
-  isLoading
-}: {
-  onAnalyze: (urls: string[]) => void;
-  isLoading: boolean;
-}) {
-  const [inputText, setInputText] = useState("");
-  const [loadingText, setLoadingText] = useState("Parsing product reviews...");
-  const [tab, setTab] = useState<'url' | 'csv'>('url');
-
-  useEffect(() => {
-    if (!isLoading) return;
-    const texts = [
-      "Phase 1: Spawning Scrape.do parallel workers to extract deep review catalog...",
-      "Phase 2: Executing Map-Reduce Gemini AI analysis...",
-      "Phase 3: Finalizing executive return risk matrix..."
-    ];
-    let i = 0;
-    setLoadingText(texts[0]);
-    const interval = setInterval(() => {
-      i = (i + 1) % texts.length;
-      setLoadingText(texts[i]);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [isLoading]);
-
-  const handleStart = (e?: React.MouseEvent | React.FormEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    if (!inputText.trim()) return;
-    const urls = inputText.split('\n').map(u => u.trim()).filter(u => u.length > 0);
-    onAnalyze(urls);
-  };
-
-  const getPlatformPills = () => {
-    const urls = inputText.split('\n').map(u => u.trim()).filter(u => u.length > 0);
-    let flipkartCount = 0;
-    let meeshoCount = 0;
-    urls.forEach(u => {
-      if (u.includes('flipkart.com')) flipkartCount++;
-      if (u.includes('meesho.com')) meeshoCount++;
-    });
-
-    if (flipkartCount === 0 && meeshoCount === 0) return null;
-
-    return (
-      <div className="flex gap-2 mb-3 mt-2">
-        {flipkartCount > 0 && (
-          <span className="px-2 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded text-xs font-medium flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
-            {flipkartCount} Flipkart URL{flipkartCount > 1 ? 's' : ''} detected
-          </span>
-        )}
-        {meeshoCount > 0 && (
-          <span className="px-2 py-1 bg-pink-500/10 text-pink-400 border border-pink-500/20 rounded text-xs font-medium flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse"></div>
-            {meeshoCount} Meesho URL{meeshoCount > 1 ? 's' : ''} detected
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <form onSubmit={handleStart} className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-4 h-full">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-white">Smart Ingestion</h2>
-          <p className="text-sm text-neutral-400 mt-1">Import products to trigger AI analysis.</p>
-        </div>
-      </div>
-
-      <div className="flex space-x-1 bg-black/40 p-1 rounded-xl border border-white/5 w-fit">
-        <button
-          type="button"
-          onClick={(e) => { e.preventDefault(); setTab('url'); }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'url' ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'text-neutral-400 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Direct URL Input
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.preventDefault(); setTab('csv'); }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-            tab === 'csv' ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' : 'text-neutral-400 hover:text-white hover:bg-white/5'
-          }`}
-        >
-          Bulk CSV Upload
-        </button>
-      </div>
-      
-      {tab === 'url' ? (
-        <div className="flex flex-col flex-grow">
-          {getPlatformPills()}
-          <textarea 
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            disabled={isLoading}
-            className="w-full flex-grow min-h-[150px] bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all resize-none placeholder:text-neutral-600 disabled:opacity-50"
-            placeholder="https://flipkart.com/product/p/itme...&#10;https://meesho.com/s/p/..."
-          />
-        </div>
-      ) : (
-        <div className="flex-grow min-h-[150px] border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center bg-black/20 hover:bg-black/40 transition-colors cursor-pointer group">
-          <svg className="w-8 h-8 text-neutral-500 group-hover:text-indigo-400 transition-colors mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          <span className="text-sm font-medium text-neutral-400 group-hover:text-white transition-colors">Drag & Drop Catalog CSV</span>
-          <span className="text-xs text-neutral-500 mt-1">or click to browse files</span>
-        </div>
-      )}
-      
-      <div className="flex justify-end pt-2">
-        <button 
-          type="submit"
-          onClick={handleStart}
-          disabled={isLoading || (tab === 'url' && !inputText.trim())}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-medium text-sm transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] disabled:opacity-50 disabled:shadow-none"
-        >
-          {isLoading ? (
-            <>
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {loadingText}
-            </>
-          ) : (
-            '⚡ Start AI Analysis'
-          )}
-        </button>
-      </div>
-    </form>
-  );
-}
 
 function MultiStepPipelineLoader({ activeStep }: { activeStep: number }) {
   const steps = [
@@ -462,8 +321,6 @@ function HistoricalTable({
   );
 }
 
-const ExecutiveIntelligenceConsoleModal = ExecutiveConsole;
-
 function SettingsManagerModal({ 
   isOpen, 
   onClose, 
@@ -500,14 +357,24 @@ function SettingsManagerModal({
 
   const [toast, setToast] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
-  useEffect(() => {
-    if (isOpen && userState) {
-      setFullName(userState.full_name || '');
-      setWhatsapp(userState.whatsapp_number || '');
-      setCompanyName(userState.company_name || '');
-      setWhatsappAlerts(userState.whatsapp_alerts_enabled || false);
-    }
-  }, [isOpen, userState]);
+  // Seed the form from the current profile whenever the modal is (re)opened.
+  // Adjusting during render is React's documented alternative to a
+  // setState-in-effect cascade for prop-derived state.
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  const seedKey = isOpen && userState ? JSON.stringify([
+    userState.full_name, userState.whatsapp_number, userState.company_name, userState.whatsapp_alerts_enabled
+  ]) : null;
+
+  if (seedKey !== null && seedKey !== seededFor) {
+    setSeededFor(seedKey);
+    setFullName(userState.full_name || '');
+    setWhatsapp(userState.whatsapp_number || '');
+    setCompanyName(userState.company_name || '');
+    setWhatsappAlerts(userState.whatsapp_alerts_enabled || false);
+  }
+  if (seedKey === null && seededFor !== null) {
+    setSeededFor(null);
+  }
 
   if (!isOpen) return null;
 
@@ -1201,10 +1068,10 @@ export default function Dashboard() {
         showToast("Failed to process product reviews: " + errorMsg, "error");
         setIsIngestionModalOpen(false);
       }
-    } catch (err: any) {
-      const errorMsg = (err.message === "TIMEOUT_90S" || err.message?.includes("504") || err.message?.includes("timeout"))
+    } catch (err) {
+      const errorMsg = (errorMessage(err) === "TIMEOUT_90S" || errorMessage(err)?.includes("504") || errorMessage(err)?.includes("timeout"))
         ? "The request took longer than expected (timed out after 90s). Please try a direct product page link or re-submit."
-        : (err.message || 'An unexpected error occurred during analysis.');
+        : (errorMessage(err) || 'An unexpected error occurred during analysis.');
       setError("Failed to process product reviews: " + errorMsg);
       showToast("Failed to process product reviews: " + errorMsg, "error");
       setIsIngestionModalOpen(false);
@@ -1263,9 +1130,9 @@ export default function Dashboard() {
         localStorage.removeItem('reviewlens_persistent_catalog');
         localStorage.removeItem('reviewlens_cached_catalog');
       } catch { /* ignore */ }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[Dashboard] Clear all failed:', err);
-      setError('Failed to clear history: ' + (err.message || 'Unknown error'));
+      setError('Failed to clear history: ' + (errorMessage(err) || 'Unknown error'));
     }
   };
 
@@ -1499,7 +1366,6 @@ export default function Dashboard() {
         onClose={() => setIsIngestionModalOpen(false)}
         onAnalyze={(urls, options) => handleAnalyze(urls, options)}
         isLoading={isLoading}
-        loadingStep={activeStep}
         currentSkuIndex={currentSkuIndex}
         totalSkus={totalSkus}
         availableCredits={userState?.credits ?? 9999}

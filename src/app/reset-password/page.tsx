@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import { updatePassword } from './actions'
 
@@ -14,7 +13,7 @@ export default function ResetPasswordPage() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('')
-  const [state, formAction, isPending] = useActionState(async (prevState: any, formData: FormData) => {
+  const [state, formAction, isPending] = useActionState(async (prevState: typeof initialState, formData: FormData) => {
     const res = await updatePassword(formData)
     return res || { error: '' }
   }, initialState)

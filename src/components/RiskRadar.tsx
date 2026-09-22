@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { AnalyzedProductSummary } from '@/app/actions';
+import type { LooseDefect } from '@/lib/types';
 
 interface RiskRadarProps {
   results: AnalyzedProductSummary[];
@@ -38,7 +39,7 @@ export default function RiskRadar({ results, activeProduct, onSelectProduct, onS
     const defectTaxonomy = intelligence.defectTaxonomy || [];
 
     if (defectTaxonomy.length > 0) {
-      defectTaxonomy.forEach((defect: any, dIdx: number) => {
+      defectTaxonomy.forEach((defect: LooseDefect, dIdx: number) => {
         const severity: "Critical" | "High" | "Moderate" = 
           (defect.severity === "Critical" || defect.severity === "High" || defect.severity === "Moderate") 
             ? defect.severity 

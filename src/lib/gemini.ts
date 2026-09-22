@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI, Schema, SchemaType } from "@google/generative-ai";
 import { cleanAndParseJSON } from "./ai";
+import type { LooseReview } from './types';
 
 export interface RiskTrajectory {
   currentRisk: number;
@@ -80,12 +81,12 @@ const TEMPORAL_SCHEMA: Schema = {
 };
 
 export async function generateTemporalVarianceIntelligence(
-  currentReviews: any[],
-  previousReviews: any[],
+  currentReviews: LooseReview[],
+  previousReviews: LooseReview[],
   productTitle: string
 ): Promise<TemporalCohortIntelligence> {
-  const currentNegCount = currentReviews.filter((r: any) => Number(r.rating || 3) <= 2).length;
-  const prevNegCount = previousReviews.filter((r: any) => Number(r.rating || 3) <= 2).length;
+  const currentNegCount = currentReviews.filter((r) => Number(r.rating || 3) <= 2).length;
+  const prevNegCount = previousReviews.filter((r) => Number(r.rating || 3) <= 2).length;
 
   const currentRisk = currentReviews.length > 0 ? Math.round((currentNegCount / currentReviews.length) * 100) : 25;
   const previousRisk = previousReviews.length > 0 ? Math.round((prevNegCount / previousReviews.length) * 100) : 32;

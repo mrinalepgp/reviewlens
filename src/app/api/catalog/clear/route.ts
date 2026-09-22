@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createClient, getAuthenticatedUser } from '@/utils/supabase/server';
+import { errorMessage } from '@/lib/errors';
 
 /**
  * DELETE /api/catalog/clear
@@ -12,12 +13,12 @@ import { createClient } from '@/utils/supabase/server';
  * Returns 401 if the caller is not authenticated.
  * Returns 500 with a structured error body on database failure.
  */
-export async function DELETE(request: Request) {
+export async function DELETE() {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
 
-    if (authError || !user) {
+    if (!user) {
       console.warn('[API /api/catalog/clear] Unauthenticated clear attempt rejected.');
       return NextResponse.json(
         { success: false, error: 'Unauthorized. Please log in.' },
@@ -66,10 +67,10 @@ export async function DELETE(request: Request) {
     console.log(`[API /api/catalog/clear] Successfully deleted ${deleted} analyses record(s) for user ${user.id}.`);
 
     return NextResponse.json({ success: true, deleted });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[API /api/catalog/clear] Unhandled exception:', err);
     return NextResponse.json(
-      { success: false, error: err.message || 'An unexpected error occurred.' },
+      { success: false, error: errorMessage(err) || 'An unexpected error occurred.' },
       { status: 500 }
     );
   }

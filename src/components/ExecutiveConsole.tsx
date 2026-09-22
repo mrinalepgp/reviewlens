@@ -1,18 +1,75 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { exportSupplierAuditPDF } from '@/lib/pdfExport';
 import { AnalyzedProductSummary } from '@/app/actions';
 import { sanitizeCustomerQuote } from '@/lib/analyzer';
 import { deriveCategoryPrice } from '@/lib/scraper';
+import type { LooseDefect, LooseReview, LooseVernacular } from '@/lib/types';
+import { reviewBody } from '@/lib/types';
+import type { AuthenticityRadar } from '@/lib/scraper';
+import { analyzeReviewAuthenticity, SIGNAL_LABELS, type FakeSignal } from '@/lib/fakeReview';
+
+/** Derive an authenticity block on the client for analyses stored before the radar existed. */
+function analyzeRadarFromReviews(reviews: LooseReview[]): AuthenticityRadar {
+  const radar = analyzeReviewAuthenticity(
+    reviews.map((r, idx) => ({
+      id: r.id ?? `review_${idx}`,
+      content: reviewBody(r),
+      rating: r.rating ?? 0,
+      author: r.author,
+      date: r.date,
+      verified: r.verified,
+    }))
+  );
+  return {
+    authenticityScore: radar.authenticityScore,
+    suspiciousPercentage: radar.suspectedPercentage,
+    verifiedCount: reviews.length - radar.suspectedCount,
+    suspiciousCount: radar.suspectedCount,
+    suspiciousReviewCount: radar.suspectedCount,
+    attackRiskLevel:
+      radar.suspectedPercentage >= 25 ? 'HIGH' : radar.suspectedPercentage >= 10 ? 'MEDIUM' : 'LOW',
+    spikeDates: radar.spikeDates,
+    signalTally: radar.signalTally,
+    verdicts: radar.verdicts,
+    flaggedPatterns: (Object.entries(radar.signalTally) as Array<[FakeSignal, number]>)
+      .filter(([, count]) => count > 0)
+      .map(([signal, count]) => ({
+        type: SIGNAL_LABELS[signal],
+        description: `${count} of ${reviews.length} reviews matched this signal.`,
+        severity: count >= reviews.length * 0.2 ? 'HIGH' : count >= reviews.length * 0.08 ? 'MEDIUM' : 'LOW',
+      })),
+    disputeDraft: null,
+  };
+}
+
+type ConsoleTab = 'diagnostics' | 'playbook' | 'vernacular' | 'reviews' | 'competitors' | 'shield';
+type TimeRange = 'ALL' | '30D' | '90D' | '1Y';
+
+/** Extra fields a stored analysis row carries alongside AnalyzedProductSummary. */
+interface StoredAnalysisFields {
+  raw_reviews?: LooseReview[];
+  reviews?: LooseReview[];
+  reviewsCount?: number;
+  return_risk_score?: number;
+  product_price?: string | number;
+  asp?: string | number;
+  margin_bleed_range?: string;
+  shield_radar?: Record<string, unknown>;
+  competitor_benchmarks?: Record<string, unknown>;
+  product_title?: string;
+  product_name?: string;
+  category?: string;
+}
 
 /**
  * Canonical data transformer for Executive Console Modal.
  * Extracts accurate numerical price (e.g. ₹399 -> 399) and reviews array.
  */
-export function extractModalPriceAndReviews(product: any): {
+export function extractModalPriceAndReviews(product: Record<string, any> | null | undefined): {
   extractedPrice: number;
-  reviews: Array<any>;
+  reviews: LooseReview[];
 } {
   if (!product) return { extractedPrice: 0, reviews: [] };
   const intelligence = product.intelligence || {};
@@ -54,9 +111,10 @@ export default function ExecutiveConsole({
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const intelligence = product.intelligence || {};
-  const titleLower = (product.title || "").toLowerCase();
+  // Stored analyses carry snake_case columns that AnalyzedProductSummary does
+  // not declare; this typed view replaces the scattered `product as any` casts.
+  const stored = product as unknown as StoredAnalysisFields;
   const { extractedPrice: modalPrice, reviews: extractedReviews } = extractModalPriceAndReviews(product);
-  const activeASP = modalPrice;
 
   // Calculator & Action Suite State
   const [monthlyUnits, setMonthlyUnits] = useState<number>(1000);
@@ -65,9 +123,14 @@ export default function ExecutiveConsole({
   const [timeRange, setTimeRange] = useState<'ALL' | '30D' | '90D' | '1Y'>('ALL');
   const [showSafeHarborModal, setShowSafeHarborModal] = useState(false);
 
-  useEffect(() => {
+  // Re-seed the ASP input when a different SKU (or a newly scraped price) is
+  // shown, without an effect round trip.
+  const aspSeedKey = `${product.id ?? product.url}:${modalPrice}`;
+  const [aspSeededFor, setAspSeededFor] = useState(aspSeedKey);
+  if (aspSeededFor !== aspSeedKey) {
+    setAspSeededFor(aspSeedKey);
     setAsp(modalPrice);
-  }, [product.id, modalPrice]);
+  }
 
   const handleExportPDF = () => {
     setIsExportingPDF(true);
@@ -151,47 +214,51 @@ Seller Central Admin`;
   
   const rawReviewsList = extractedReviews.length > 0 
     ? extractedReviews 
-    : ((product as any).raw_reviews || (product as any).reviews || intelligence.raw_reviews || intelligence.reviews || []);
-  const auditedReviewsCount = (product as any).reviewsCount || rawReviewsList.length;
+    : (stored.raw_reviews || stored.reviews || intelligence.raw_reviews || intelligence.reviews || []);
+  const auditedReviewsCount = stored.reviewsCount || rawReviewsList.length;
+
+  // Snapshot the clock once per mount. Reading Date.now() during render makes
+  // the component impure and can desync server and client output.
+  const [nowMs] = useState(() => Date.now());
 
   // Cohort Analytics Filtering
-  const cohortFilteredReviews = rawReviewsList.filter((r: any) => {
+  const cohortFilteredReviews = rawReviewsList.filter((r: LooseReview) => {
     if (timeRange === 'ALL') return true;
-    const rDate = new Date(r.date || Date.now()).getTime();
+    const rDate = new Date(r.date || nowMs).getTime();
     if (isNaN(rDate)) return true;
-    const diffDays = (Date.now() - rDate) / (1000 * 60 * 60 * 24);
+    const diffDays = (nowMs - rDate) / (1000 * 60 * 60 * 24);
     if (timeRange === '30D') return diffDays <= 30;
     if (timeRange === '90D') return diffDays <= 90;
     if (timeRange === '1Y') return diffDays <= 365;
     return true;
   });
 
-  const cohortCriticalCount = cohortFilteredReviews.filter((r: any) => r.rating <= 2 || r.sentiment === 'CRITICAL DEFECT').length;
+  const cohortCriticalCount = cohortFilteredReviews.filter((r: LooseReview) => (r.rating ?? 0) <= 2 || r.sentiment === 'CRITICAL DEFECT').length;
   const cohortRiskScore = cohortFilteredReviews.length > 0
     ? Math.round((cohortCriticalCount / cohortFilteredReviews.length) * 100)
     : (executiveScorecard?.returnRiskScore || 0);
 
   // Emerging Defect Spike Detection
-  const recent30DCount = rawReviewsList.filter((r: any) => {
-    const diffDays = (Date.now() - new Date(r.date || Date.now()).getTime()) / (1000 * 60 * 60 * 24);
+  const recent30DCount = rawReviewsList.filter((r: LooseReview) => {
+    const diffDays = (nowMs - new Date(r.date || nowMs).getTime()) / (1000 * 60 * 60 * 24);
     return diffDays <= 30;
   });
-  const recent30DCritical = recent30DCount.filter((r: any) => r.rating <= 2).length;
+  const recent30DCritical = recent30DCount.filter((r: LooseReview) => (r.rating ?? 0) <= 2).length;
   const recent30DRate = recent30DCount.length > 0 ? (recent30DCritical / recent30DCount.length) * 100 : 0;
-  const overallRate = rawReviewsList.length > 0 ? (rawReviewsList.filter((r: any) => r.rating <= 2).length / rawReviewsList.length) * 100 : 0;
+  const overallRate = rawReviewsList.length > 0 ? (rawReviewsList.filter((r: LooseReview) => (r.rating ?? 0) <= 2).length / rawReviewsList.length) * 100 : 0;
   const defectSpikePercent = Math.max(0, Math.round(recent30DRate - overallRate) + 28);
 
   // Pure UI rendering directly from analysis record
   const displayReviews = cohortFilteredReviews;
 
-  const filteredReviews = displayReviews.filter((r: any) => {
-    if (reviewFilter === 'CRITICAL DEFECT') return r.rating <= 2 || r.sentiment === 'DEFECT_ALERT' || r.sentiment === 'CRITICAL DEFECT';
-    if (reviewFilter === 'POSITIVE') return r.rating >= 4 || r.sentiment === 'POSITIVE' || r.sentiment === 'OPTIMAL';
+  const filteredReviews = displayReviews.filter((r: LooseReview) => {
+    if (reviewFilter === 'CRITICAL DEFECT') return (r.rating ?? 0) <= 2 || r.sentiment === 'DEFECT_ALERT' || r.sentiment === 'CRITICAL DEFECT';
+    if (reviewFilter === 'POSITIVE') return (r.rating ?? 0) >= 4 || r.sentiment === 'POSITIVE' || r.sentiment === 'OPTIMAL';
     return true;
   });
 
   const competitorRadar = intelligence.competitorRadar || intelligence.competitor_benchmarks || null;
-  const yourReturnRiskVal = competitorRadar?.yourReturnRisk ?? cohortRiskScore ?? (product as any).return_risk_score ?? 36;
+  const yourReturnRiskVal = competitorRadar?.yourReturnRisk ?? cohortRiskScore ?? stored.return_risk_score ?? 36;
   const industryBenchmarkRiskVal = competitorRadar?.industryBenchmarkRisk ?? 16.5;
   const categoryRankVal = competitorRadar?.categoryRank || "#12 in Category SKUs";
   const competitorsList = (competitorRadar?.competitors && competitorRadar.competitors.length > 0)
@@ -204,30 +271,11 @@ Seller Central Admin`;
         "Competitor data requires live analysis — cached results may not include benchmarks."
       ];
 
-  const authenticityRadar = intelligence.authenticityRadar || {
-    authenticityScore: 86,
-    suspiciousPercentage: 14,
-    anomalyIndex: 2.1,
-    verifiedCount: Math.max(1, Math.round((auditedReviewsCount || 48) * 0.86)),
-    suspiciousCount: Math.max(1, Math.round((auditedReviewsCount || 48) * 0.14)),
-    attackRiskLevel: "LOW",
-    flaggedPatterns: [
-      {
-        type: "Recency Spike",
-        description: "3 negative reviews detected within 48-hour window from single fulfillment node",
-        severity: "HIGH"
-      },
-      {
-        type: "Duplicate Phrasing Anomaly",
-        description: "2 low-rating reviews contain identical 14-word complaints suggesting competitor bot activity",
-        severity: "MEDIUM"
-      }
-    ],
-    disputeDraft: {
-      subject: `Urgent: Formal Dispute Ticket for ${product.title} Suspicious Review Spike`,
-      body: `Formal seller protection ticket requesting immediate audit of recent suspicious low-rating feedback on ${product.title}. ReviewLens anomaly detection identified a recency spike exceeding standard variance by 340%. Please inspect accounts and freeze illegitimate refund triggers.`
-    }
-  };
+  // A stored analysis predating the radar has no authenticity block. Fall back
+  // to running the radar over whatever reviews we have rather than to the old
+  // invented 86/14/2.1 figures, which looked identical for every SKU.
+  const authenticityRadar: AuthenticityRadar =
+    intelligence.authenticityRadar ?? analyzeRadarFromReviews(rawReviewsList);
 
   const handleCopyDisputeTicket = () => {
     const text = `SUBJECT: ${authenticityRadar.disputeDraft?.subject}\n\n${authenticityRadar.disputeDraft?.body}`;
@@ -294,12 +342,12 @@ Seller Central Admin`;
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider font-sans">Temporal Cohort:</span>
               <div className="flex items-center gap-1 bg-black/60 p-1 rounded-lg border border-white/10">
-                {[
+                {([
                   { id: 'ALL', label: 'All Time' },
                   { id: '30D', label: 'Last 30 Days', isLocked: isFreePlan },
                   { id: '90D', label: 'Last 90 Days', isLocked: isFreePlan },
                   { id: '1Y', label: 'Last 1 Year', isLocked: isFreePlan },
-                ].map((btn) => (
+                ] as Array<{ id: TimeRange; label: string; isLocked?: boolean }>).map((btn) => (
                   <button
                     key={btn.id}
                     onClick={() => {
@@ -308,7 +356,7 @@ Seller Central Admin`;
                         else alert('Temporal Cohort Date Range filtering is locked on Free Plan. Upgrade to Growth Seller to unlock.');
                         return;
                       }
-                      setTimeRange(btn.id as any);
+                      setTimeRange(btn.id);
                     }}
                     className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all font-sans flex items-center gap-1 ${
                       timeRange === btn.id
@@ -563,17 +611,17 @@ Seller Central Admin`;
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-1 bg-black/40 p-1 sm:p-1.5 rounded-xl border border-white/5 w-fit font-sans">
-              {[
+              {([
                 { id: 'diagnostics', label: 'Root-Cause' },
                 { id: 'playbook', label: 'Mitigation Playbook' },
                 { id: 'vernacular', label: 'Vernacular Decoder' },
                 { id: 'reviews', label: 'Review Stream' },
                 { id: 'competitors', label: 'Competitor Radar' },
                 { id: 'shield', label: 'Shield & Logistics Radar' }
-              ].map(tab => (
+              ] as Array<{ id: ConsoleTab; label: string }>).map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all font-sans ${
                     activeTab === tab.id 
                     ? 'bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]' 
@@ -592,7 +640,7 @@ Seller Central Admin`;
                 <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <h4 className="text-lg font-semibold text-white">Defect Taxonomy</h4>
                   <div className="grid gap-4">
-                    {defectTaxonomy?.map((defect: any, idx: number) => (
+                    {defectTaxonomy?.map((defect: LooseDefect, idx: number) => (
                       <div key={idx} className="bg-black/40 border border-white/5 rounded-xl p-5 flex flex-col gap-3 relative overflow-hidden">
                         <div className="flex justify-between items-start z-10">
                           <div>
@@ -672,12 +720,12 @@ Seller Central Admin`;
                   </div>
 
                   <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                    {vernacularDecoder?.map((item: any, idx: number) => (
+                    {vernacularDecoder?.map((item: LooseVernacular, idx: number) => (
                       <div key={idx} className="bg-black/40 border border-white/10 rounded-xl p-5 flex flex-col gap-3 relative overflow-hidden group hover:border-indigo-500/40 transition-all">
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-extrabold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
-                              "{item.originalTerm || item.rawVernacularText}"
+                              &ldquo;{item.originalTerm || item.rawVernacularText}&rdquo;
                             </span>
                             <span className="text-neutral-500 text-xs">→</span>
                           </div>
@@ -691,7 +739,7 @@ Seller Central Admin`;
                         </h5>
 
                         <p className="text-xs text-neutral-300 italic bg-white/[0.03] p-3 rounded-lg border border-white/5 font-serif">
-                          &ldquo;{sanitizeCustomerQuote(item.context || item.rawVernacularText, product.title)}&rdquo;
+                          &ldquo;{sanitizeCustomerQuote(item.context || item.rawVernacularText || '', product.title)}&rdquo;
                         </p>
 
                         {item.decodedIntent && (
@@ -734,7 +782,7 @@ Seller Central Admin`;
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    {filteredReviews.map((rev: any, idx: number) => {
+                    {filteredReviews.map((rev: LooseReview, idx: number) => {
                       const rating = Number(rev.rating || 1);
                       const isAlert = rating <= 2 || rev.sentiment === 'DEFECT_ALERT';
                       return (
@@ -772,7 +820,7 @@ Seller Central Admin`;
                           )}
 
                           <p className="text-xs text-neutral-200 leading-relaxed font-sans mt-0.5">
-                            "{rev.content || rev.reviewText || rev.text || rev.comment || rev.reviewBody || rev.body}"
+                            &ldquo;{rev.content || rev.reviewText || rev.text || rev.comment || rev.reviewBody || rev.body}&rdquo;
                           </p>
 
                           <div className="flex items-center justify-between text-[10px] text-neutral-500 mt-1 font-mono">
@@ -821,7 +869,7 @@ Seller Central Admin`;
                   <div className="flex flex-col gap-3">
                     <h5 className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Top 3 Category Leaders (Benchmark Comparison)</h5>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {competitorsList.map((comp: any, cIdx: number) => (
+                      {competitorsList.map((comp: { name?: string; benchmarkRisk?: number; reviewsCount?: number; advantage?: string }, cIdx: number) => (
                         <div key={cIdx} className="bg-black/40 border border-white/10 rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
@@ -931,9 +979,13 @@ Seller Central Admin`;
                     </div>
 
                     <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex flex-col gap-1">
-                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Recency Velocity Anomaly</span>
-                      <span className="text-3xl font-black text-indigo-300 tabular-nums">{authenticityRadar.anomalyIndex}</span>
-                      <span className="text-xs text-indigo-300/80">Normal Recency Velocity Score</span>
+                      <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Review Volume Spikes</span>
+                      <span className="text-3xl font-black text-indigo-300 tabular-nums">{authenticityRadar.spikeDates?.length ?? 0}</span>
+                      <span className="text-xs text-indigo-300/80">
+                        {authenticityRadar.spikeDates && authenticityRadar.spikeDates.length > 0
+                          ? `Abnormal posting days: ${authenticityRadar.spikeDates.join(', ')}`
+                          : 'No abnormal posting days detected'}
+                      </span>
                     </div>
                   </div>
 
@@ -941,7 +993,7 @@ Seller Central Admin`;
                   <div className="flex flex-col gap-3">
                     <h5 className="text-xs font-bold text-neutral-300 uppercase tracking-wider">Flagged Review Authenticity Anomalies</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {authenticityRadar.flaggedPatterns.map((pat: any, pIdx: number) => (
+                      {(authenticityRadar.flaggedPatterns ?? []).map((pat: { type?: string; description?: string; severity?: string }, pIdx: number) => (
                         <div key={pIdx} className="bg-black/40 border border-white/10 rounded-xl p-4 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-bold text-white">{pat.type}</span>

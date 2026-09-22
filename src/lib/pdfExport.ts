@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { AnalyzedProductSummary } from '@/app/actions';
+import type { LooseDefect } from './types';
 
 export function exportSupplierAuditPDF(product: AnalyzedProductSummary) {
   const doc = new jsPDF({
@@ -132,7 +133,7 @@ export function exportSupplierAuditPDF(product: AnalyzedProductSummary) {
     }
   ];
 
-  defectsToRender.forEach((defect: any) => {
+  defectsToRender.forEach((defect: LooseDefect) => {
     // Strip redundant product title prefix from defect cluster headlines
     let rawTitle = defect.title || defect.category || defect.subIssue || "Material & Build Discrepancy";
     if (product.title) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createClient, getAuthenticatedUser } from '@/utils/supabase/server';
 import { analyzeUrlsAction } from '@/app/actions';
+import { errorMessage } from '@/lib/errors';
 
 export const maxDuration = 60;
 
@@ -24,17 +25,16 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const user = await getAuthenticatedUser();
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized. Please log in to run analyses.' },
         { status: 401 }
       );
     }
 
-    // Robust userId fallback: prefer UUID, fall back to email, then sentinel
-    const userId: string = user.id || user.email || 'demo-user-id';
+    const userId: string = user.id;
     console.log(`[API /api/analyze] Authenticated request. userId=${userId} email=${user.email}`);
 
     const body = await request.json();
@@ -102,10 +102,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ...result, scrapedLive: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[API /api/analyze] Exception:', err);
     return NextResponse.json(
-      { success: false, error: err.message || 'An unexpected error occurred.' },
+      { success: false, error: errorMessage(err) || 'An unexpected error occurred.' },
       { status: 500 }
     );
   }

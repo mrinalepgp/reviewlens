@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PLAN_LIST, formatInr } from "@/lib/pricing";
 
 export default async function Home(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const searchParams = props.searchParams ? await props.searchParams : undefined;
@@ -241,7 +242,7 @@ export default async function Home(props: { searchParams?: Promise<{ [key: strin
                   href="/login" 
                   className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-[0_0_20px_rgba(79,70,229,0.35)] hover:shadow-[0_0_25px_rgba(79,70,229,0.5)]"
                 >
-                  Analyze Your Catalog Free &rarr;
+                  Start Your Free Trial &rarr;
                 </Link>
               </div>
             </div>
@@ -256,42 +257,48 @@ export default async function Home(props: { searchParams?: Promise<{ [key: strin
               <p className="text-sm text-neutral-400 max-w-xl mx-auto">Scale your margin recovery with a plan tailored for your catalog volume.</p>
             </div>
             <div className="grid md:grid-cols-3 gap-5">
-              {/* Starter */}
-              <div className="p-6 rounded-xl bg-white/[0.02] border border-white/10 flex flex-col">
-                <h3 className="text-lg font-semibold mb-1">Starter</h3>
-                <div className="text-3xl font-black mb-4">₹0<span className="text-sm text-neutral-500 font-normal"> /mo</span></div>
-                <ul className="space-y-3 mb-6 flex-1 text-xs text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> 5 Product Scans/mo</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Standard Flipkart/Meesho Parser</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Defect Taxonomy Breakdown</li>
-                </ul>
-                <Link href="/login" className="w-full py-2.5 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-semibold text-xs">Start Free</Link>
-              </div>
-              {/* Growth */}
-              <div className="p-6 rounded-xl bg-gradient-to-b from-indigo-900/20 to-transparent border border-indigo-500/30 flex flex-col relative shadow-lg">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-0.5 bg-indigo-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full shadow">Most Popular</div>
-                <h3 className="text-lg font-semibold mb-1">Growth Pro</h3>
-                <div className="text-3xl font-black mb-4">₹2,999<span className="text-sm text-neutral-500 font-normal"> /mo</span></div>
-                <ul className="space-y-3 mb-6 flex-1 text-xs text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Unlimited Product Scrapes</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Hinglish Vernacular Decoder</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Automated Supplier Directives</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> ROI Financial Bleed Calculator</li>
-                </ul>
-                <Link href="/login" className="w-full py-2.5 rounded-full text-center bg-indigo-600 hover:bg-indigo-500 transition-colors font-bold text-xs text-white shadow-md shadow-indigo-500/25">Get Started</Link>
-              </div>
-              {/* Enterprise */}
-              <div className="p-6 rounded-xl bg-white/[0.02] border border-white/10 flex flex-col">
-                <h3 className="text-lg font-semibold mb-1">Enterprise</h3>
-                <div className="text-3xl font-black mb-4">Custom</div>
-                <ul className="space-y-3 mb-6 flex-1 text-xs text-neutral-400">
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Multi-Brand Shield Radar</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> API Webhooks &amp; Data Pipeline</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Category Leader Benchmarks</li>
-                  <li className="flex items-center gap-2"><svg className="w-3.5 h-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Dedicated Dispute Specialist</li>
-                </ul>
-                <Link href="/login" className="w-full py-2.5 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-semibold text-xs">Contact Sales</Link>
-              </div>
+              {PLAN_LIST.map((plan) => (
+                <div
+                  key={plan.code}
+                  className={
+                    plan.highlighted
+                      ? "p-6 rounded-xl bg-gradient-to-b from-indigo-900/20 to-transparent border border-indigo-500/30 flex flex-col relative shadow-lg"
+                      : "p-6 rounded-xl bg-white/[0.02] border border-white/10 flex flex-col"
+                  }
+                >
+                  {plan.highlighted && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-0.5 bg-indigo-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-full shadow">
+                      Most Popular
+                    </div>
+                  )}
+                  <h3 className="text-lg font-semibold mb-1">{plan.name}</h3>
+                  <div className="text-3xl font-black mb-1">
+                    {formatInr(plan.priceInr)}
+                    <span className="text-sm text-neutral-500 font-normal"> /mo</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 mb-4 leading-snug">{plan.tagline}</p>
+                  <ul className="space-y-3 mb-6 flex-1 text-xs text-neutral-400">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <svg className="w-3.5 h-3.5 text-indigo-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/login"
+                    className={
+                      plan.highlighted
+                        ? "w-full py-2.5 rounded-full text-center bg-indigo-600 hover:bg-indigo-500 transition-colors font-bold text-xs text-white shadow-md shadow-indigo-500/25"
+                        : "w-full py-2.5 rounded-full text-center border border-white/10 hover:bg-white/5 transition-colors font-semibold text-xs"
+                    }
+                  >
+                    {plan.code === 'enterprise' ? 'Contact Sales' : 'Get Started'}
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
         </section>

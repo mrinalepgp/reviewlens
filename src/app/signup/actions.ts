@@ -54,7 +54,7 @@ export async function signup(formData: FormData) {
           console.error("Failed to insert user profile record:", profileError)
       }
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Exact connection error to server console during signup:", error);
     return { error: 'An unexpected connection error occurred' }
   }

@@ -2,6 +2,10 @@ import * as cheerio from 'cheerio';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { cleanAndParseJSON } from './ai';
 import { executeMapReduceAnalysis } from './analyzer';
+import type { DefectBleed } from './bleed';
+import type { LooseDefect, LooseReview, LooseVernacular, LooseCompetitorRadar, ScrapedNode } from './types';
+import { isScrapedNode, asNumber, pickString } from './types';
+import { errorMessage } from './errors';
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // LEVEL 1: Zero-DOM Hydration State & Schema Extraction Helpers
@@ -94,7 +98,7 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
       /window\.__DATA__\s*=\s*(\{[\s\S]*?\});/,
       /window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]*?\});/
     ];
-    let stateObj: any = null;
+    let stateObj: unknown = null;
     for (const pat of patterns) {
       const m = html.match(pat);
       if (m?.[1]) {
@@ -104,11 +108,11 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
     if (!stateObj) return result;
 
     // Recursively search for product-like objects
-    const findProduct = (obj: any, depth: number = 0): any => {
-      if (depth > 5 || !obj || typeof obj !== 'object') return null;
+    const findProduct = (obj: unknown, depth: number = 0): ScrapedNode | null => {
+      if (depth > 5 || !isScrapedNode(obj)) return null;
       if (obj.name && (obj.price || obj.discountedPrice || obj.reviews)) return obj;
-      if (obj.productData) return obj.productData;
-      if (obj.product) return obj.product;
+      if (isScrapedNode(obj.productData)) return obj.productData;
+      if (isScrapedNode(obj.product)) return obj.product;
       for (const key of Object.keys(obj)) {
         const found = findProduct(obj[key], depth + 1);
         if (found) return found;
@@ -118,21 +122,20 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
 
     const product = findProduct(stateObj);
     if (product) {
-      result.title = product.name || product.title;
-      const priceVal = product.discountedPrice || product.price;
-      if (priceVal) {
-        const num = parseFloat(String(priceVal).replace(/[^0-9.]/g, ''));
-        if (!isNaN(num) && num > 20) result.price = Math.round(num);
-      }
+      result.title = pickString(product, 'name', 'title');
+      const num = asNumber(product.discountedPrice ?? product.price);
+      if (num !== undefined && num > 20) result.price = Math.round(num);
+
       if (Array.isArray(product.reviews)) {
-        for (const r of product.reviews) {
-          const text = r.text || r.content || r.body || '';
-          if (text && String(text).trim().length > 10) {
+        for (const entry of product.reviews) {
+          if (!isScrapedNode(entry)) continue;
+          const text = pickString(entry, 'text', 'content', 'body');
+          if (text && text.length > 10) {
             result.reviews.push({
-              text: String(text).trim(),
-              rating: Math.min(5, Math.max(1, Number(r.rating || r.stars) || 4)),
-              date: r.date || r.created_at || '',
-              author: r.author || r.reviewer || 'Verified Buyer'
+              text,
+              rating: Math.min(5, Math.max(1, asNumber(entry.rating ?? entry.stars) || 4)),
+              date: pickString(entry, 'date', 'created_at') ?? '',
+              author: pickString(entry, 'author', 'reviewer') ?? 'Verified Buyer'
             });
           }
         }
@@ -143,6 +146,55 @@ function extractFromWindowState(html: string): HydrationExtractionResult {
     console.warn('[Level 1B: __INITIAL_STATE__] Parse error:', (e as Error).message);
   }
   return result;
+}
+
+/** A review node as it appears inside a Flipkart hydration payload. */
+interface HydrationReview {
+  rating: number;
+  title: string;
+  text: string;
+  author: string;
+  date: string;
+}
+
+/**
+ * Walk a decoded hydration payload collecting Flipkart `ProductReviewValue` /
+ * `ReviewCard` nodes. Both the __INITIAL_STATE__ reader and the Flipkart
+ * metadata extractor previously carried byte-identical copies of this walk.
+ */
+// `sink` is accepted structurally so the two call sites can keep their own
+// (slightly looser) array element types.
+function collectHydrationReviews(
+  node: unknown,
+  sink: { push(review: HydrationReview): void },
+  depth = 0
+): void {
+  if (depth > 12 || !isScrapedNode(node)) return;
+
+  const nested = isScrapedNode(node.value) ? node.value : undefined;
+  const isReviewNode =
+    node.type === 'ProductReviewValue' ||
+    node.type === 'ReviewCard' ||
+    node.reviewType === 'PRODUCT_REVIEW' ||
+    (nested !== undefined && (nested.type === 'ProductReviewValue' || nested.reviewType !== undefined));
+
+  if (isReviewNode) {
+    const val = nested ?? node;
+    const text = pickString(val, 'text', 'reviewText', 'comment', 'reviewBody');
+    if (text && text.length >= 5 && !text.startsWith('|')) {
+      sink.push({
+        rating: asNumber(val.rating) || 5,
+        title: pickString(val, 'title') ?? 'Verified Purchase',
+        text,
+        author: pickString(val, 'author', 'reviewerName', 'userName', 'name') ?? 'Flipkart Customer',
+        date: pickString(val, 'created', 'createdDate', 'date', 'reviewDate') ?? 'Recent',
+      });
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    collectHydrationReviews(node[key], sink, depth + 1);
+  }
 }
 
 function extractReviewsFromInitialState(html: string): Array<{ rating: number; title: string; text: string; author?: string; date?: string }> {
@@ -172,34 +224,7 @@ function extractReviewsFromInitialState(html: string): Array<{ rating: number; t
     }
 
     // 2. Traversal for ProductReviewValue / ReviewCard
-    function traverse(obj: any) {
-      if (!obj || typeof obj !== 'object') return;
-      
-      if (
-        obj.type === 'ProductReviewValue' || 
-        obj.type === 'ReviewCard' || 
-        obj.reviewType === 'PRODUCT_REVIEW' ||
-        (obj.value && (obj.value.type === 'ProductReviewValue' || obj.value.reviewType))
-      ) {
-        const val = obj.value || obj;
-        const reviewText = val.text || val.reviewText || val.comment || val.reviewBody;
-        if (reviewText && typeof reviewText === 'string' && reviewText.trim().length >= 5 && !reviewText.trim().startsWith('|')) {
-          reviews.push({
-            rating: Number(val.rating) || 5,
-            title: val.title || 'Verified Purchase',
-            text: reviewText.trim(),
-            author: val.author || val.reviewerName || val.userName || val.name || 'Flipkart Customer',
-            date: val.created || val.createdDate || val.date || val.reviewDate || 'Recent'
-          });
-        }
-      }
-      
-      for (const key of Object.keys(obj)) {
-        traverse(obj[key]);
-      }
-    }
-
-    traverse(state);
+    collectHydrationReviews(state, reviews);
     return reviews;
   } catch (err) {
     console.warn('[Hydration Parser Warning] Failed to parse __INITIAL_STATE__ JSON:', err);
@@ -276,34 +301,10 @@ export function extractFlipkartMetadataAndReviews(html: string): {
       }
 
       // Reviews from ProductReviewValue in slots/widgets
-      function traverseForReviews(obj: any) {
-        if (!obj || typeof obj !== 'object') return;
-        if (
-          obj.type === 'ProductReviewValue' || 
-          obj.type === 'ReviewCard' || 
-          obj.reviewType === 'PRODUCT_REVIEW' ||
-          (obj.value && (obj.value.type === 'ProductReviewValue' || obj.value.reviewType))
-        ) {
-          const val = obj.value || obj;
-          const reviewText = val.text || val.reviewText || val.comment || val.reviewBody;
-          if (reviewText && typeof reviewText === 'string' && reviewText.trim().length >= 5 && !reviewText.trim().startsWith('|')) {
-            reviews.push({
-              title: val.title || 'Verified Purchase',
-              text: reviewText.trim(),
-              rating: Number(val.rating) || 5,
-              author: val.author || val.reviewerName || val.userName || 'Flipkart Customer',
-              date: val.created || val.createdDate || val.date || val.reviewDate || 'Recent'
-            });
-          }
-        }
-        for (const k of Object.keys(obj)) {
-          traverseForReviews(obj[k]);
-        }
-      }
-      traverseForReviews(state);
+      collectHydrationReviews(state, reviews);
 
-    } catch (e: any) {
-      console.warn('[Scraper] Flipkart state extraction warning:', e.message);
+    } catch (e) {
+      console.warn('[Scraper] Flipkart state extraction warning:', errorMessage(e));
     }
   }
 
@@ -600,20 +601,72 @@ export interface ReviewPayload {
   author: string;
   date: string;
   sentiment?: string;
+  /** True when the Fake Review Radar's combined signal score crossed the threshold. */
   isSuspicious?: boolean;
+  /** 0–1 authenticity risk score from src/lib/fakeReview.ts. */
+  fakeScore?: number;
+  /** Which radar signals fired, so a flag can be justified to the seller. */
+  fakeSignals?: string[];
+  /** Verified-buyer tag as reported by the marketplace, when parseable. */
+  verified?: boolean;
+}
+
+/** Headline financials and risk scores for a single SKU. */
+export interface ExecutiveScorecard {
+  returnRiskScore?: number;
+  listingHealthScore?: number;
+  /** `null` when no live price was available to model a range from. */
+  estimatedMarginLossRange?: string | null;
+  primaryRiskDriver?: string;
+  estimatedCapitalProtected?: number | null;
+  /** Price the bleed model used, and whether it was scraped or inferred. */
+  unitPrice?: number;
+  priceIsEstimated?: boolean;
+  estimatedMonthlyVolume?: number | null;
+  blendedReturnRate?: number | null;
+  monthlyBleedInr?: number | null;
+  annualBleedInr?: number | null;
+  bleedByDefect?: DefectBleed[];
+  /** Set when the bleed could not be modelled, for display instead of a figure. */
+  bleedUnavailableReason?: string | null;
+  riskLevel?: string;
+  price?: string | number;
+}
+
+export interface MitigationPlaybook {
+  listingFixBullets?: string[];
+  antiReturnListingCopy?: string;
+  supplierQualityMemo?: string;
+  customerRecoveryScript?: string;
+}
+
+export interface AuthenticityRadar {
+  authenticityScore?: number;
+  suspiciousPercentage?: number;
+  verifiedCount?: number;
+  suspiciousCount?: number;
+  suspiciousReviewCount?: number;
+  attackRiskLevel?: string;
+  spikeDates?: string[];
+  signalTally?: Record<string, number>;
+  verdicts?: Array<{ id: string; fakeScore: number; isSuspected: boolean; signals: string[] }>;
+  flaggedPatterns?: Array<{ type?: string; description?: string; severity?: string }>;
+  disputeDraft?: { subject: string; body: string } | null;
 }
 
 export interface EnterpriseIntelligence {
   category?: string;
-  reviews?: any[];
-  raw_reviews?: any[];
-  executiveScorecard?: any;
-  defectTaxonomy?: any[];
-  vernacularDecoder?: any[];
-  mitigationPlaybook?: any;
-  authenticityRadar?: any;
-  competitorRadar?: any;
-  competitorDiscovery?: any[];
+  price?: string | number;
+  reviews?: LooseReview[];
+  raw_reviews?: LooseReview[];
+  executiveScorecard?: ExecutiveScorecard;
+  defectTaxonomy?: LooseDefect[];
+  vernacularDecoder?: LooseVernacular[];
+  mitigationPlaybook?: MitigationPlaybook;
+  authenticityRadar?: AuthenticityRadar;
+  competitorRadar?: LooseCompetitorRadar | null;
+  competitor_benchmarks?: LooseCompetitorRadar | null;
+  competitorDiscovery?: Array<{ suggestedSearchKeyword?: string; targetCompetitorCategory?: string }>;
 }
 
 export interface ScrapingResult {
@@ -645,7 +698,7 @@ function getRandomUserAgent() {
 export function cleanScrapedTitle(rawTitle: string, parsedMetaTitle: string): string {
   if (!rawTitle) return parsedMetaTitle;
 
-  let cleaned = rawTitle
+  const cleaned = rawTitle
     .replace(/^Product\s+Reviews:\s*/i, '')
     .replace(/^Reviews\s+of\s*/i, '')
     .replace(/^All\s+Reviews\s*(for|of)?\s*/i, '')
@@ -702,7 +755,7 @@ export function parseMetadataFromUrl(url: string, marketplace: Marketplace): { t
 
     const lowerTitle = cleanTitle.toLowerCase();
     let category = 'General Merchandise';
-    let brand = cleanTitle.split(' ')[0] || 'Marketplace Brand';
+    const brand = cleanTitle.split(' ')[0] || 'Marketplace Brand';
 
     if (lowerTitle.includes('sunglasses') || lowerTitle.includes('glasses') || lowerTitle.includes('eyewear') || lowerTitle.includes('goggles') || lowerTitle.includes('frame')) {
       category = 'Eyewear & Sunglasses';
@@ -978,7 +1031,7 @@ export function getFlipkartReviewUrls(targetUrl: string, requestedCount: number,
       }
     }
     return urls;
-  } catch (e) {
+  } catch {
     return [targetUrl];
   }
 }
@@ -1010,7 +1063,7 @@ export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
   if (reviewCards.length === 0) {
     const stars = $('div.XQDdHH, div._3LWZlK');
     if (stars.length > 0) {
-      reviewCards = stars.closest('div').parent() as any;
+      reviewCards = stars.closest('div').parent();
     }
   }
 
@@ -1122,7 +1175,7 @@ export function parseCheerioReviewsFromHtml($: cheerio.CheerioAPI): Array<{
     seenTexts.add(dedupeKey);
 
     // Try to extract author name (often a short text segment with specific patterns)
-    let author = 'Flipkart Customer';
+    const author = 'Flipkart Customer';
     let date = '';
 
     // Look for month-year patterns in the text (e.g. "Jun, 2025" or "3 months ago")
@@ -1199,8 +1252,8 @@ export async function fetchWithBrightData(targetUrl: string): Promise<string> {
     const html = await res.text();
     console.log(`[BrightData Success] Fetched ${html.length} bytes for ${targetUrl}`);
     return html;
-  } catch (err: any) {
-    console.error(`[Scraper] Bright Data exception for ${targetUrl}:`, err.message);
+  } catch (err) {
+    console.error(`[Scraper] Bright Data exception for ${targetUrl}:`, errorMessage(err));
     throw err;
   }
 }
@@ -1345,8 +1398,8 @@ export async function scrapeFlipkartReviews(
     console.log('[Scraper] Fetching Flipkart canonical metadata page:', canonicalProductUrl);
     prodHtml = await fetchWithBrightData(canonicalProductUrl);
     debugHtmlSnapshot = prodHtml;
-  } catch (e: any) {
-    console.warn('[Scraper] Canonical fetch failed:', e.message);
+  } catch (e) {
+    console.warn('[Scraper] Canonical fetch failed:', errorMessage(e));
   }
 
   // ── Step 2: Extract reviews from the 1.4MB landing page immediately ──
@@ -1514,8 +1567,8 @@ export async function scrapeFlipkartReviews(
       let revHtml = '';
       try {
         revHtml = await fetchWithBrightData(pageUrl);
-      } catch (e: any) {
-        console.warn(`[Scraper] Page ${p} fetch failed:`, e.message);
+      } catch (e) {
+        console.warn(`[Scraper] Page ${p} fetch failed:`, errorMessage(e));
       }
       const pageLatency = Date.now() - pageStart;
       console.log(`[Scraper] Page ${p} fetched in ${pageLatency}ms (${revHtml.length} bytes)`);
@@ -1538,9 +1591,10 @@ export async function scrapeFlipkartReviews(
     });
 
     const settledResults = await Promise.allSettled(batchPromises);
+    type BatchPageResult = Awaited<(typeof batchPromises)[number]>;
     const batchResults = settledResults
-      .filter(r => r.status === 'fulfilled')
-      .map(r => (r as PromiseFulfilledResult<any>).value);
+      .filter((r): r is PromiseFulfilledResult<BatchPageResult> => r.status === 'fulfilled')
+      .map(r => r.value);
 
     batchResults.sort((a, b) => a.page - b.page);
 
@@ -1659,8 +1713,8 @@ export async function fetchMarketplaceReviews(
         console.log('[Scraper] Fetching Meesho product page:', sanitized);
         mHtml = await fetchWithBrightData(sanitized);
         debugHtmlSnapshot = mHtml;
-      } catch (e: any) {
-        console.warn("[Scraper] Meesho fetch failed", e.message);
+      } catch (e) {
+        console.warn("[Scraper] Meesho fetch failed", errorMessage(e));
       }
 
       if (mHtml) {
@@ -1766,8 +1820,8 @@ export async function fetchMarketplaceReviews(
       try {
         respHtml = await fetchWithBrightData(sanitized);
         debugHtmlSnapshot = respHtml;
-      } catch (e: any) {
-        console.warn("[Scraper] Fallback fetch failed", e.message);
+      } catch (e) {
+        console.warn("[Scraper] Fallback fetch failed", errorMessage(e));
       }
       if (respHtml) {
         const geminiResult = await extractViaGeminiSelfHealing(respHtml, marketplace);
@@ -1831,27 +1885,54 @@ export async function fetchMarketplaceReviews(
         numericPrice = parseInt(match[1].replace(/,/g, ''), 10) || 0;
       }
     }
+    // Track whether the figure came off the page or from the category heuristic,
+    // so downstream financials can be labelled honestly.
+    const priceIsLive = numericPrice > 0;
     if (!numericPrice) {
       numericPrice = deriveCategoryPrice(finalTitle, finalCategory);
     }
     const estimatedPrice = scrapedPrice || `₹${numericPrice}`;
 
+    // Span of the ingested reviews, used to back out monthly order volume.
+    const reviewTimestamps = deduplicatedReviews
+      .map((r) => (r.date ? new Date(r.date).getTime() : NaN))
+      .filter((t) => Number.isFinite(t));
+    const accrualMonths = reviewTimestamps.length >= 2
+      ? Math.max(1, (Math.max(...reviewTimestamps) - Math.min(...reviewTimestamps)) / (30 * 24 * 60 * 60 * 1000))
+      : null;
+
     console.log(`[Scraper] Successfully harvested ${deduplicatedReviews.length} real reviews for "${finalTitle}" (${finalCategory})`);
 
     // Execute Map-Reduce Gemini AI Analysis Pipeline on live reviews
-    const mapReduceIntelligence = await executeMapReduceAnalysis(deduplicatedReviews, finalTitle, marketplace);
-
-    const formattedReviews: ReviewPayload[] = deduplicatedReviews.map((r, idx) => ({
-      id: r.id || `ext_${Date.now()}_${idx}`,
+    const mapReduceIntelligence = await executeMapReduceAnalysis(
+      deduplicatedReviews,
+      finalTitle,
       marketplace,
-      rating: r.rating,
-      title: r.title || `${r.rating}★ Customer Review`,
-      content: r.content,
-      author: r.author || 'Verified Buyer',
-      date: r.date || new Date(Date.now() - idx * 86400000).toISOString(),
-      sentiment: r.rating <= 2 ? 'CRITICAL DEFECT' : r.rating === 3 ? 'WARNING' : 'OPTIMAL',
-      isSuspicious: r.rating <= 2 && idx % 4 === 0
-    }));
+      { livePrice: numericPrice, priceIsLive, accrualMonths }
+    );
+
+    // Authenticity verdicts are computed from the review corpus; index them by
+    // review id so each formatted review carries its own evidence-backed flag.
+    const verdictById = new Map<string, { isSuspected: boolean; fakeScore: number; signals: string[] }>(
+      (mapReduceIntelligence.authenticityRadar?.verdicts ?? []).map((v) => [v.id, v] as const)
+    );
+
+    const formattedReviews: ReviewPayload[] = deduplicatedReviews.map((r, idx) => {
+      const verdict = verdictById.get(r.id ?? `review_${idx}`);
+      return {
+        id: r.id || `ext_${Date.now()}_${idx}`,
+        marketplace,
+        rating: r.rating,
+        title: r.title || `${r.rating}★ Customer Review`,
+        content: r.content,
+        author: r.author || 'Verified Buyer',
+        date: r.date || new Date(Date.now() - idx * 86400000).toISOString(),
+        sentiment: r.rating <= 2 ? 'CRITICAL DEFECT' : r.rating === 3 ? 'WARNING' : 'OPTIMAL',
+        isSuspicious: verdict?.isSuspected ?? false,
+        fakeScore: verdict?.fakeScore ?? 0,
+        fakeSignals: verdict?.signals ?? []
+      };
+    });
 
     return {
       success: true,
@@ -1866,14 +1947,14 @@ export async function fetchMarketplaceReviews(
       brand: finalBrand
     };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error(`[Scraper Pipeline] Exception:`, error);
     return {
       success: false,
       marketplace,
       url: sanitized,
       reviews: [],
-      error: `Scraping pipeline failed: ${error.message}`
+      error: `Scraping pipeline failed: ${errorMessage(error)}`
     };
   }
 }
@@ -1994,7 +2075,7 @@ export async function estimateAuditPreFlight(
     if (brightDataKey) {
       try {
         html = await fetchWithBrightData(url);
-      } catch(e) {}
+      } catch {}
     }
     if (!html) {
       const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { 'User-Agent': getRandomUserAgent() } });
@@ -2067,7 +2148,7 @@ export async function scrapeFlipkart(productUrl: string) {
     try {
       const bdHtml = await fetchWithBrightData(target);
       if (bdHtml) return bdHtml;
-    } catch(e) {}
+    } catch {}
     // Direct fallback if Bright Data fails
     const res = await fetch(target, {
       headers: {

@@ -24,7 +24,6 @@ export interface AuditModalProps {
   onClose: () => void;
   onAnalyze: (urls: string[], options?: { startDate?: string; endDate?: string; isComparison?: boolean; reviewLimit?: number }) => Promise<void> | void;
   isLoading: boolean;
-  loadingStep?: number;
   currentSkuIndex?: number;
   totalSkus?: number;
   availableCredits: number;
@@ -39,7 +38,6 @@ export default function AuditModal({
   onClose,
   onAnalyze,
   isLoading,
-  loadingStep = 1,
   availableCredits = 9999,
   userPlan = 'enterprise',
   currentProductCount = 0,
@@ -78,18 +76,12 @@ export default function AuditModal({
   // Free Tier Gating Modal state
   const [showFreeTierGate, setShowFreeTierGate] = useState<boolean>(false);
 
-  // Reset internal submission state when modal closes or parent finishes loading
-  useEffect(() => {
-    if (!isLoading) {
-      setIsSubmitting(false);
-    }
-  }, [isLoading]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setIsSubmitting(false);
-    }
-  }, [isOpen]);
+  // Clear the local submitting flag as soon as the modal closes or the parent
+  // reports it has finished, adjusting during render instead of scheduling an
+  // extra render pass from an effect.
+  if (isSubmitting && (!isLoading || !isOpen)) {
+    setIsSubmitting(false);
+  }
 
   const isBusy = isSubmitting || isLoading;
 
@@ -113,20 +105,19 @@ export default function AuditModal({
     // CUSTOM: do NOT overwrite user-edited start/end dates
   };
 
-  // Run Real-Time Pre-Flight Estimation when URL or Date Range changes
+  // Run Real-Time Pre-Flight Estimation when URL or Date Range changes.
+  // Every state write happens inside the debounce callback rather than the
+  // effect body, so editing the URL never forces a second synchronous render.
   useEffect(() => {
-    if (!isOpen || !inputText.trim()) {
-      setEstimation(null);
-      return;
-    }
-
-    const firstUrl = inputText.split('\n').map(u => u.trim()).find(u => u.length > 10);
-    if (!firstUrl) {
-      setEstimation(null);
-      return;
-    }
+    const firstUrl = isOpen && inputText.trim()
+      ? inputText.split('\n').map(u => u.trim()).find(u => u.length > 10)
+      : undefined;
 
     const timer = setTimeout(async () => {
+      if (!firstUrl) {
+        setEstimation(null);
+        return;
+      }
       setIsEstimating(true);
       try {
         const res = await fetch('/api/preflight', {

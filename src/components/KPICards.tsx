@@ -23,11 +23,15 @@ export default function KPICards({ data }: KPICardsProps) {
   }, {} as Record<string, number>);
   const topDefect = Object.keys(defectCounts).sort((a, b) => defectCounts[b] - defectCounts[a])[0] || "No defects detected";
 
-  // Calculate total synchronized protected capital across active SKUs
-  const protectedCapital = data.reduce((acc, curr) => {
-    const itemCap = curr.intelligence?.executiveScorecard?.estimatedCapitalProtected;
-    return acc + (typeof itemCap === 'number' ? itemCap : 134850);
-  }, 0);
+  // Total protected capital across active SKUs. Only SKUs with a real modelled
+  // figure contribute — a SKU whose price or review volume could not be
+  // extracted is counted as unpriced and reported, never back-filled with a
+  // placeholder amount.
+  const pricedValues = data
+    .map((d) => d.intelligence?.executiveScorecard?.estimatedCapitalProtected)
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const protectedCapital = pricedValues.reduce((acc, v) => acc + v, 0);
+  const unpricedSkus = activeSkus - pricedValues.length;
 
   const formatINR = (num: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(num);
@@ -37,7 +41,7 @@ export default function KPICards({ data }: KPICardsProps) {
     activeSkus: "Count of active e-commerce catalog items currently tracked and analyzed.",
     avgRisk: "Weighted average return risk score across catalog: Formula = (Negative Review Ratio * 35 + 15)%.",
     topDefect: "Highest frequency defect category aggregated across Gemini AI defect taxonomies.",
-    capitalProtected: "Total preventable financial loss: Formula = Σ(Negative Sentiment Ratio * Est. Monthly Volume * Unit Price)."
+    capitalProtected: "Annual preventable loss across priced SKUs. Per SKU: Live Price x (1 + reverse logistics) x Est. Monthly Volume x Return Risk Factor x Defect Frequency, summed over addressable defects only. SKUs without a live price are excluded rather than estimated."
   };
 
   return (
@@ -128,7 +132,14 @@ export default function KPICards({ data }: KPICardsProps) {
             i
           </div>
         </div>
-        <span className="text-xl font-black text-emerald-400 pl-1">{formatINR(protectedCapital)}</span>
+        <span className="text-xl font-black text-emerald-400 pl-1">
+          {pricedValues.length > 0 ? formatINR(protectedCapital) : '—'}
+        </span>
+        {unpricedSkus > 0 && (
+          <span className="text-[9px] text-neutral-500 pl-1 leading-tight">
+            {unpricedSkus} SKU{unpricedSkus === 1 ? '' : 's'} without a live price — excluded
+          </span>
+        )}
 
         {activeTooltip === 'capitalProtected' && (
           <div className="absolute z-30 bottom-full mb-2 left-2 right-2 bg-neutral-900 border border-emerald-500/30 p-2 rounded-xl shadow-2xl text-[10px] text-neutral-300 leading-snug animate-in fade-in duration-150">

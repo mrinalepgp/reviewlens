@@ -55,7 +55,7 @@ async function main() {
     console.log('✓ Authenticated as admin');
   }
 
-  let insertPayload: any = {
+  const insertPayload: Record<string, unknown> = {
     user_id: userId,
     product_url: TEST_URL,
     platform: scrapeResult.marketplace,

@@ -11,7 +11,7 @@ const initialState = {
 
 export default function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [state, formAction, isPending] = useActionState(async (prevState: any, formData: FormData) => {
+  const [state, formAction, isPending] = useActionState(async (prevState: typeof initialState, formData: FormData) => {
     const res = await login(formData)
     return res || { error: '' }
   }, initialState)

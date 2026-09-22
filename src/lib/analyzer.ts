@@ -1,5 +1,9 @@
 import { ReviewPayload, Marketplace, EnterpriseIntelligence } from './scraper';
 import { cleanAndParseJSON } from './ai';
+import { computeBleed, computeCapitalProtected } from './bleed';
+import { resolveReturnRisk, ADDRESSABLE_DEFECT_LABELS } from './taxonomy';
+import { analyzeReviewAuthenticity, SIGNAL_LABELS, type FakeSignal } from './fakeReview';
+import type { LooseDefect, LooseVernacular } from './types';
 
 export function sanitizeCustomerQuote(text: string, productTitle?: string): string {
   if (!text) return "";
@@ -256,7 +260,7 @@ Return raw JSON ONLY matching this schema:
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const parsed = cleanAndParseJSON(rawText);
       if (parsed.defectClusters && Array.isArray(parsed.defectClusters) && parsed.defectClusters.length > 0) {
-        const clusters: DefectCluster[] = parsed.defectClusters.map((c: any, idx: number) => ({
+        const clusters: DefectCluster[] = parsed.defectClusters.map((c: LooseDefect, idx: number) => ({
           id: c.id || `cluster-${idx + 1}`,
           title: c.title || c.subIssue || c.category || `Defect Factor ${idx + 1}`,
           sharePercentage: Number(c.sharePercentage || c.frequencyPercent || (40 - idx * 10)),
@@ -273,10 +277,10 @@ Return raw JSON ONLY matching this schema:
         return {
           deducedCategory: parsed.deducedCategory || "General Catalog",
           defectClusters: clusters,
-          vernacularDecodes: (parsed.vernacularDecodes || []).map((v: any) => ({
+          vernacularDecodes: (parsed.vernacularDecodes || []).map((v: LooseVernacular) => ({
             ...v,
-            rawVernacularText: sanitizeCustomerQuote(v.rawVernacularText || v.context || v.originalTerm, productTitle),
-            context: sanitizeCustomerQuote(v.context || v.rawVernacularText, productTitle)
+            rawVernacularText: sanitizeCustomerQuote(v.rawVernacularText || v.context || v.originalTerm || '', productTitle),
+            context: sanitizeCustomerQuote(v.context || v.rawVernacularText || '', productTitle)
           })),
           competitorRadar: parsed.competitorRadar,
           sentimentSummary: parsed.sentimentSummary || { negativeCount: 0, neutralCount: 0, positiveCount: 0, avgRating: 3.5 }
@@ -310,10 +314,20 @@ Return raw JSON ONLY matching this schema:
   };
 }
 
+export interface AnalysisContext {
+  /** Live scraped selling price in rupees. Omit when extraction failed. */
+  livePrice?: number | null;
+  /** False when `livePrice` is a category heuristic rather than a scraped figure. */
+  priceIsLive?: boolean;
+  /** Months the ingested reviews span, when dates were parsed. */
+  accrualMonths?: number | null;
+}
+
 export async function executeMapReduceAnalysis(
   reviews: ReviewPayload[],
   productTitle: string,
-  marketplace: Marketplace
+  marketplace: Marketplace,
+  context: AnalysisContext = {}
 ): Promise<EnterpriseIntelligence> {
   console.log(`[Map-Reduce AI Engine] Initiating Map-Reduce Pipeline for ${reviews.length} reviews for "${productTitle}"...`);
   
@@ -334,22 +348,7 @@ export async function executeMapReduceAnalysis(
   // 2. REDUCE STEP: Statistical Recency Weighting & Multi-Batch Consolidation
   console.log(`[Map-Reduce AI Engine] Executing REDUCE step across ${mapResults.length} batch outputs...`);
 
-  const now = Date.now();
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  
-  let recentNegativeCount = 0;
-  let totalNegativeCount = 0;
-
-  reviews.forEach((r) => {
-    const reviewDate = r.date ? new Date(r.date).getTime() : now;
-    const isRecent = (now - reviewDate) <= THIRTY_DAYS_MS;
-    
-    if (r.rating <= 2) {
-      totalNegativeCount++;
-      if (isRecent) recentNegativeCount++;
-    }
-  });
-
+  const totalNegativeCount = reviews.filter((r) => r.rating <= 2).length;
   const negativeRatio = totalNegativeCount / (reviews.length || 1);
 
   // Compute realistic Return Risk % (strictly 15.0% - 40.0% based on negative review ratio)
@@ -361,14 +360,23 @@ export async function executeMapReduceAnalysis(
   const consolidatedVernacular: MapBatchResult['vernacularDecodes'] = [];
 
   let deducedCategory = "General Catalog";
-  let aiCompetitorRadar: any = null;
+
+  // First batch that produced a radar wins; taken up front so the value is a
+  // plain const rather than a closure-assigned `let`.
+  const rawCompetitorRadar = mapResults.find((mr) => mr.competitorRadar)?.competitorRadar;
+  const aiCompetitorRadar = rawCompetitorRadar
+    ? {
+        ...rawCompetitorRadar,
+        yourReturnRisk:
+          rawCompetitorRadar.yourReturnRisk == null || isNaN(rawCompetitorRadar.yourReturnRisk)
+            ? weightedReturnRiskScore
+            : rawCompetitorRadar.yourReturnRisk,
+      }
+    : null;
 
   mapResults.forEach((mr) => {
     if (mr.deducedCategory && mr.deducedCategory !== "General Catalog") {
       deducedCategory = mr.deducedCategory;
-    }
-    if (mr.competitorRadar && !aiCompetitorRadar) {
-      aiCompetitorRadar = mr.competitorRadar;
     }
     if (mr.defectClusters && mr.defectClusters.length > 0) {
       rawConsolidatedDefects.push(...mr.defectClusters);
@@ -385,12 +393,47 @@ export async function executeMapReduceAnalysis(
 
   const primaryRiskDriver = defectClusters[0]?.title || defectClusters[0]?.subIssue || "Material & Build Discrepancy";
   
-  // Calculate Capital Protected dynamically: (Negative Sentiment Ratio * Est. Monthly Volume * Product Price)
-  const estMonthlyVolume = 500;
-  // Import price from scraper heuristics instead of hardcoded 899
-  const { deriveCategoryPrice } = await import('./scraper');
-  const productPriceNum = deriveCategoryPrice(productTitle, deducedCategory);
-  const estimatedCapitalProtected = Math.max(25000, Math.round(negativeRatio * estMonthlyVolume * productPriceNum));
+  // ── Financial return bleed ────────────────────────────────────────────────
+  // Bleed = Live Price × Est. Monthly Volume × Return Risk Factor × Defect Frequency.
+  // Volume is backed out of the review count, the return-risk factor comes from
+  // the defect taxonomy, and the frequency is the cluster's own share. When the
+  // live price is missing we fall back to the category heuristic but mark the
+  // result `priceIsEstimated` so the UI can say so instead of implying precision.
+  const priceIsLive = context.priceIsLive === true && !!context.livePrice && context.livePrice > 0;
+  let productPriceNum = context.livePrice && context.livePrice > 0 ? context.livePrice : 0;
+  if (!productPriceNum) {
+    const { deriveCategoryPrice } = await import('./scraper');
+    productPriceNum = deriveCategoryPrice(productTitle, deducedCategory);
+  }
+
+  const bleed = computeBleed({
+    price: productPriceNum,
+    reviewCount: reviews.length,
+    accrualMonths: context.accrualMonths ?? null,
+    defects: defectClusters.map((cluster) => {
+      const label = cluster.title || cluster.subIssue || 'Unclassified Defect';
+      const share = Number(cluster.sharePercentage ?? cluster.frequencyPercent ?? 0) / 100;
+      return {
+        label,
+        mentions: Math.round(Math.min(Math.max(share, 0), 1) * reviews.length),
+        returnRiskFactor: resolveReturnRisk(label, deducedCategory),
+      };
+    }),
+  });
+
+  const estimatedCapitalProtected = computeCapitalProtected(bleed, ADDRESSABLE_DEFECT_LABELS);
+
+  // ── Fake review radar ─────────────────────────────────────────────────────
+  const radar = analyzeReviewAuthenticity(
+    reviews.map((r, idx) => ({
+      id: r.id ?? `review_${idx}`,
+      content: r.content,
+      rating: r.rating,
+      author: r.author,
+      date: r.date,
+      verified: (r as { verified?: boolean }).verified,
+    }))
+  );
 
   const riskStatus: 'safe' | 'warning' | 'critical' = 
     weightedReturnRiskScore >= 30 ? 'critical' : weightedReturnRiskScore >= 22 ? 'warning' : 'safe';
@@ -406,10 +449,6 @@ export async function executeMapReduceAnalysis(
         decodedIntent: "Customer return risk",
         businessImpactCategory: "Refund Claim"
       })) : []);
-
-  if (aiCompetitorRadar && (aiCompetitorRadar.yourReturnRisk == null || isNaN(aiCompetitorRadar.yourReturnRisk))) {
-    aiCompetitorRadar.yourReturnRisk = weightedReturnRiskScore;
-  }
 
   // Only use AI-generated competitor radar — no static fallback brands
   const competitorRadar = aiCompetitorRadar || {
@@ -429,9 +468,20 @@ export async function executeMapReduceAnalysis(
     executiveScorecard: {
       returnRiskScore: weightedReturnRiskScore,
       listingHealthScore,
-      estimatedMarginLossRange: `INR ${Math.round(estimatedCapitalProtected * 0.35).toLocaleString('en-IN')} - INR ${Math.round(estimatedCapitalProtected * 0.70).toLocaleString('en-IN')}`,
+      estimatedMarginLossRange: bleed.annualBleedInr == null
+        ? null
+        : `INR ${Math.round(bleed.annualBleedInr * 0.75).toLocaleString('en-IN')} - INR ${Math.round(bleed.annualBleedInr * 1.25).toLocaleString('en-IN')}`,
       primaryRiskDriver,
       estimatedCapitalProtected,
+      // Full bleed model so the console can show the working, not just a total.
+      unitPrice: productPriceNum,
+      priceIsEstimated: !priceIsLive,
+      estimatedMonthlyVolume: bleed.estimatedMonthlyVolume,
+      blendedReturnRate: bleed.blendedReturnRate,
+      monthlyBleedInr: bleed.monthlyBleedInr,
+      annualBleedInr: bleed.annualBleedInr,
+      bleedByDefect: bleed.perDefect,
+      bleedUnavailableReason: bleed.unavailableReason ?? null,
       riskLevel: riskStatus === 'critical' ? 'Critical Risk' : riskStatus === 'warning' ? 'Warning' : 'Optimal'
     },
     defectTaxonomy: defectClusters,
@@ -443,30 +493,37 @@ export async function executeMapReduceAnalysis(
       customerRecoveryScript: `Dear Customer, we apologize for the quality discrepancy. Please contact our support line for an instant exchange.`
     },
     competitorRadar,
+    // Every figure below is derived from the ingested review set — see
+    // src/lib/fakeReview.ts for the five signals and their weights.
     authenticityRadar: {
-      authenticityScore: 86,
-      suspiciousPercentage: 14,
-      anomalyIndex: 2.1,
-      verifiedCount: Math.max(1, Math.round((reviews.length || 48) * 0.86)),
-      suspiciousCount: Math.max(1, Math.round((reviews.length || 48) * 0.14)),
-      attackRiskLevel: recentNegativeCount > 4 ? "HIGH" : "LOW",
-      suspiciousReviewCount: recentNegativeCount,
-      flaggedPatterns: [
-        {
-          type: "Recency Spike",
-          description: `${recentNegativeCount || 3} negative reviews detected within 48-hour window from single fulfillment node`,
-          severity: recentNegativeCount > 4 ? "HIGH" : "MEDIUM"
-        },
-        {
-          type: "Duplicate Phrasing Anomaly",
-          description: "2 low-rating reviews contain identical 14-word complaints suggesting competitor bot activity",
-          severity: "MEDIUM"
-        }
-      ],
-      disputeDraft: {
-        subject: `Urgent: Formal Dispute Ticket for ${productTitle} Suspicious Review Spike`,
-        body: `Formal seller protection ticket requesting immediate audit of recent suspicious low-rating feedback on ${productTitle}. ReviewLens anomaly detection identified a recency spike exceeding standard variance by 340%. Please inspect accounts and freeze illegitimate refund triggers.`
-      }
+      authenticityScore: radar.authenticityScore,
+      suspiciousPercentage: radar.suspectedPercentage,
+      verifiedCount: reviews.length - radar.suspectedCount,
+      suspiciousCount: radar.suspectedCount,
+      suspiciousReviewCount: radar.suspectedCount,
+      attackRiskLevel: radar.suspectedPercentage >= 25 ? "HIGH" : radar.suspectedPercentage >= 10 ? "MEDIUM" : "LOW",
+      spikeDates: radar.spikeDates,
+      signalTally: radar.signalTally,
+      verdicts: radar.verdicts,
+      flaggedPatterns: (Object.entries(radar.signalTally) as Array<[FakeSignal, number]>)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([signal, count]) => ({
+          type: SIGNAL_LABELS[signal],
+          description: `${count} of ${reviews.length} ingested reviews matched this signal.`,
+          severity: count >= reviews.length * 0.2 ? "HIGH" : count >= reviews.length * 0.08 ? "MEDIUM" : "LOW"
+        })),
+      disputeDraft: radar.suspectedCount > 0
+        ? {
+            subject: `Formal Dispute Ticket: ${radar.suspectedCount} suspicious reviews on ${productTitle}`,
+            body: `Seller protection request for ${productTitle}. ReviewLens flagged ${radar.suspectedCount} of ${reviews.length} ingested reviews (${radar.suspectedPercentage}%) as likely inauthentic. Signals observed: ${
+              (Object.entries(radar.signalTally) as Array<[FakeSignal, number]>)
+                .filter(([, c]) => c > 0)
+                .map(([s, c]) => `${SIGNAL_LABELS[s]} (${c})`)
+                .join('; ') || 'none'
+            }.${radar.spikeDates.length > 0 ? ` Abnormal review-volume spikes recorded on: ${radar.spikeDates.join(', ')}.` : ''} Please audit the associated accounts.`
+          }
+        : null
     },
     competitorDiscovery: [
       {

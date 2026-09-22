@@ -124,7 +124,7 @@ async function runTest() {
           await page.screenshot({ path: `public/test-proof-failure-attempt-${attempt}.png`, fullPage: true });
           console.log(`📸 Failure screenshot saved to public/test-proof-failure-attempt-${attempt}.png`);
         }
-      } catch(e) {}
+      } catch {}
       
       if (browser) {
         await browser.close();
